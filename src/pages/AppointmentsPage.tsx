@@ -39,6 +39,7 @@ const statusMap: Record<string, { label: string; variant: 'default' | 'success' 
   cancelled: { label: 'Cancelado', variant: 'danger' },
   no_show: { label: 'Não compareceu', variant: 'default' },
 }
+const mobileWeekdayMap = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'] as const
 
 export function AppointmentsPage() {
   const { currentShop } = useAuth()
@@ -52,6 +53,9 @@ export function AppointmentsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [statusModalOpen, setStatusModalOpen] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 640px)').matches : false
+  )
 
   // Form state
   const [formClientId, setFormClientId] = useState('')
@@ -72,6 +76,28 @@ export function AppointmentsPage() {
   useEffect(() => {
     if (currentShop) loadData()
   }, [currentShop, currentWeekStart])
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 640px)')
+    const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches)
+    setIsMobile(mediaQuery.matches)
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', onChange)
+      return () => mediaQuery.removeEventListener('change', onChange)
+    }
+
+    mediaQuery.addListener(onChange)
+    return () => mediaQuery.removeListener(onChange)
+  }, [])
+
+  function getWeekdayLabel(day: Date) {
+    const label = isMobile
+      ? mobileWeekdayMap[day.getDay()]
+      : format(day, 'EEEE', { locale: ptBR })
+
+    return label.charAt(0).toUpperCase() + label.slice(1)
+  }
 
   async function loadData() {
     if (!currentShop) return
@@ -239,8 +265,8 @@ export function AppointmentsPage() {
                     : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700'
                 }`}
               >
-                <span className="text-xs font-medium uppercase">
-                  {format(day, 'EEE', { locale: ptBR })}
+                <span className={`text-xs font-medium ${isMobile ? 'uppercase' : 'capitalize'}`}>
+                  {getWeekdayLabel(day)}
                 </span>
                 <span className="mt-1 text-lg font-bold">{format(day, 'dd')}</span>
                 {dayApts.length > 0 && (
