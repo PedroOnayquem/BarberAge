@@ -14,12 +14,12 @@ import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/appointments', icon: Calendar, label: 'Agenda' },
-  { to: '/clients', icon: Users, label: 'Clientes' },
-  { to: '/services', icon: Scissors, label: 'Serviços' },
-  { to: '/professionals', icon: UserCog, label: 'Profissionais' },
-  { to: '/settings', icon: Settings, label: 'Configurações' },
+  { to: '/app', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/app/appointments', icon: Calendar, label: 'Agenda' },
+  { to: '/app/clients', icon: Users, label: 'Clientes' },
+  { to: '/app/services', icon: Scissors, label: 'Serviços' },
+  { to: '/app/professionals', icon: UserCog, label: 'Profissionais' },
+  { to: '/app/settings', icon: Settings, label: 'Configurações' },
 ]
 
 interface SidebarProps {
@@ -74,7 +74,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                     : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
                 }`
               }
-              end={item.to === '/'}
+              end={item.to === '/app'}
             >
               <item.icon size={20} />
               {item.label}
