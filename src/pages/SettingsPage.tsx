@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Save, Plus, Trash2, Clock, CalendarOff } from 'lucide-react'
+import { Save, Plus, Trash2, Clock, CalendarOff, Copy, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/ui/Button'
@@ -78,6 +78,7 @@ function ShopSettings({ shop, isAdmin }: { shop: Shop | null; isAdmin: boolean }
   const [timezone, setTimezone] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (shop) {
@@ -106,32 +107,66 @@ function ShopSettings({ shop, isAdmin }: { shop: Shop | null; isAdmin: boolean }
     setTimeout(() => setSuccess(false), 3000)
   }
 
-  return (
-    <Card>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Input label="Nome da barbearia" value={name} onChange={(e) => setName(e.target.value)} disabled={!isAdmin} required />
-        <Input label="Telefone" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={!isAdmin} />
-        <Input label="Endereço" value={address} onChange={(e) => setAddress(e.target.value)} disabled={!isAdmin} />
-        <Select label="Timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} disabled={!isAdmin}>
-          <option value="America/Sao_Paulo">São Paulo (GMT-3)</option>
-          <option value="America/Fortaleza">Fortaleza (GMT-3)</option>
-          <option value="America/Manaus">Manaus (GMT-4)</option>
-          <option value="America/Belem">Belém (GMT-3)</option>
-          <option value="America/Recife">Recife (GMT-3)</option>
-          <option value="America/Cuiaba">Cuiabá (GMT-4)</option>
-          <option value="America/Rio_Branco">Rio Branco (GMT-5)</option>
-        </Select>
+  function handleCopySlug() {
+    if (!shop) return
+    navigator.clipboard.writeText(shop.slug)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
-        {isAdmin && (
-          <div className="flex items-center gap-3 pt-2">
-            <Button type="submit" loading={loading}>
-              <Save size={16} /> Salvar
-            </Button>
-            {success && <span className="text-sm text-emerald-600 dark:text-emerald-400">Salvo com sucesso!</span>}
+  return (
+    <div className="space-y-4">
+      {/* Client code card */}
+      {shop && (
+        <Card>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white">Código para clientes</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Compartilhe este código com seus clientes para que eles possam se cadastrar e agendar serviços na sua barbearia.
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 font-mono text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+                {shop.slug}
+              </div>
+              <button
+                onClick={handleCopySlug}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                {copied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
+                {copied ? 'Copiado!' : 'Copiar'}
+              </button>
+            </div>
           </div>
-        )}
-      </form>
-    </Card>
+        </Card>
+      )}
+
+      {/* Shop info form */}
+      <Card>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input label="Nome da barbearia" value={name} onChange={(e) => setName(e.target.value)} disabled={!isAdmin} required />
+          <Input label="Telefone" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={!isAdmin} />
+          <Input label="Endereço" value={address} onChange={(e) => setAddress(e.target.value)} disabled={!isAdmin} />
+          <Select label="Timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} disabled={!isAdmin}>
+            <option value="America/Sao_Paulo">São Paulo (GMT-3)</option>
+            <option value="America/Fortaleza">Fortaleza (GMT-3)</option>
+            <option value="America/Manaus">Manaus (GMT-4)</option>
+            <option value="America/Belem">Belém (GMT-3)</option>
+            <option value="America/Recife">Recife (GMT-3)</option>
+            <option value="America/Cuiaba">Cuiabá (GMT-4)</option>
+            <option value="America/Rio_Branco">Rio Branco (GMT-5)</option>
+          </Select>
+
+          {isAdmin && (
+            <div className="flex items-center gap-3 pt-2">
+              <Button type="submit" loading={loading}>
+                <Save size={16} /> Salvar
+              </Button>
+              {success && <span className="text-sm text-emerald-600 dark:text-emerald-400">Salvo com sucesso!</span>}
+            </div>
+          )}
+        </form>
+      </Card>
+    </div>
   )
 }
 
