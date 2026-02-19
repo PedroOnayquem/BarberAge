@@ -59,14 +59,25 @@ function PublicRoute({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+function CreateShopRoute({ children }: { children: ReactNode }) {
+  const { user, loading, currentShop, userRole } = useAuth()
+
+  if (loading) return <LoadingScreen />
+  if (!user) return <Navigate to="/login" replace />
+  if (userRole === 'client') return <Navigate to="/cliente" replace />
+  if (currentShop) return <Navigate to="/app" replace />
+
+  return <>{children}</>
+}
+
 function AppRoutes() {
   return (
     <Routes>
       {/* Public routes */}
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
-      <Route path="/cliente/register" element={<RegisterClientPage />} />
-      <Route path="/create-shop" element={<CreateShopPage />} />
+      <Route path="/cliente/register" element={<PublicRoute><RegisterClientPage /></PublicRoute>} />
+      <Route path="/create-shop" element={<CreateShopRoute><CreateShopPage /></CreateShopRoute>} />
 
       {/* Shop admin routes (/app/*) */}
       <Route path="/app" element={<ShopProtectedRoute><AppLayout /></ShopProtectedRoute>}>
