@@ -317,6 +317,45 @@ export type Database = {
         }
         Relationships: []
       }
+      client_users: {
+        Row: {
+          id: string
+          user_id: string
+          client_id: string
+          shop_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          client_id: string
+          shop_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          client_id?: string
+          shop_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_users_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_users_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       time_off: {
         Row: {
           created_at: string
@@ -370,6 +409,26 @@ export type Database = {
       get_member_role: { Args: { p_shop_id: string }; Returns: string }
       is_shop_admin: { Args: { p_shop_id: string }; Returns: boolean }
       is_shop_member: { Args: { p_shop_id: string }; Returns: boolean }
+      is_client_at_shop: { Args: { p_shop_id: string }; Returns: boolean }
+      get_client_id: { Args: { p_shop_id: string }; Returns: string }
+      get_available_slots: {
+        Args: {
+          p_shop_id: string
+          p_professional_id: string
+          p_date: string
+          p_duration_minutes: number
+        }
+        Returns: { slot_start: string; slot_end: string }[]
+      }
+      register_client: {
+        Args: {
+          p_shop_id: string
+          p_name: string
+          p_phone?: string | null
+          p_email?: string | null
+        }
+        Returns: string
+      }
     }
     Enums: {
       appointment_status:
