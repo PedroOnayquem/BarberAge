@@ -53,7 +53,7 @@ export function CreateShopPage() {
       return
     }
 
-    window.location.href = '/'
+    window.location.href = '/app'
   }
 
   return (
