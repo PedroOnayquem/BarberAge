@@ -21,6 +21,7 @@ interface AuthState {
   userRole: UserRole
   clientUser: ClientUser | null
   clientShop: Shop | null
+  refreshUserData: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
@@ -71,6 +72,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function loadUserData(userId: string) {
+    // Clear stale role-linked data before reloading
+    setShops([])
+    setCurrentShopState(null)
+    setMembership(null)
+    setClientUser(null)
+    setClientShop(null)
+
     // Load both shop memberships and client links in parallel
     const [membersRes, clientUsersRes] = await Promise.all([
       supabase.from('shop_members').select('*, shops(*)').eq('user_id', userId),
@@ -119,6 +127,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false)
   }
 
+  async function refreshUserData() {
+    const currentUserId = user?.id ?? session?.user?.id
+    if (!currentUserId) return
+    setLoading(true)
+    await loadUserData(currentUserId)
+  }
+
   function setCurrentShop(shop: Shop, mem: ShopMember) {
     setCurrentShopState(shop)
     setMembership(mem)
@@ -130,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user, session, currentShop, membership, shops, loading, setCurrentShop,
-        userRole, clientUser, clientShop,
+        userRole, clientUser, clientShop, refreshUserData,
       }}
     >
       {children}
