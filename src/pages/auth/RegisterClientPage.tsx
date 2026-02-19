@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { User, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Button } from '../../components/ui/Button'
@@ -16,6 +16,7 @@ export function RegisterClientPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const navigate = useNavigate()
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -107,7 +108,7 @@ export function RegisterClientPage() {
       return
     }
 
-    window.location.href = '/cliente'
+    navigate('/cliente')
   }
 
   if (step === 'success') {
@@ -185,3 +186,4 @@ export function RegisterClientPage() {
     </div>
   )
 }
+
