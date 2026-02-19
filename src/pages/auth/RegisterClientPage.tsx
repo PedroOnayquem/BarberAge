@@ -2,11 +2,13 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { User, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { translateError } from '../../lib/errorMessages'
 
 export function RegisterClientPage() {
+  const { refreshUserData } = useAuth()
   const [step, setStep] = useState<'form' | 'success'>('form')
   const [shopSlug, setShopSlug] = useState('')
   const [name, setName] = useState('')
@@ -108,7 +110,8 @@ export function RegisterClientPage() {
       return
     }
 
-    navigate('/cliente')
+    await refreshUserData()
+    navigate('/cliente', { replace: true })
   }
 
   if (step === 'success') {
