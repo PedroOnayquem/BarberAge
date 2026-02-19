@@ -5,6 +5,9 @@ import type { Tables } from '../types/database'
 
 type ShopMember = Tables<'shop_members'>
 type Shop = Tables<'shops'>
+type ClientUser = Tables<'client_users'>
+
+export type UserRole = 'admin' | 'professional' | 'reception' | 'client' | null
 
 interface AuthState {
   user: User | null
@@ -14,6 +17,10 @@ interface AuthState {
   shops: Shop[]
   loading: boolean
   setCurrentShop: (shop: Shop, membership: ShopMember) => void
+  // Client-specific state
+  userRole: UserRole
+  clientUser: ClientUser | null
+  clientShop: Shop | null
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
@@ -25,13 +32,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [membership, setMembership] = useState<ShopMember | null>(null)
   const [shops, setShops] = useState<Shop[]>([])
   const [loading, setLoading] = useState(true)
+  const [userRole, setUserRole] = useState<UserRole>(null)
+  const [clientUser, setClientUser] = useState<ClientUser | null>(null)
+  const [clientShop, setClientShop] = useState<Shop | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadShops(session.user.id)
+        loadUserData(session.user.id)
       } else {
         setLoading(false)
       }
@@ -41,24 +51,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadShops(session.user.id)
+        loadUserData(session.user.id)
       } else {
-        setShops([])
-        setCurrentShopState(null)
-        setMembership(null)
-        setLoading(false)
+        resetState()
       }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  async function loadShops(userId: string) {
-    const { data: members } = await supabase
-      .from('shop_members')
-      .select('*, shops(*)')
-      .eq('user_id', userId)
+  function resetState() {
+    setShops([])
+    setCurrentShopState(null)
+    setMembership(null)
+    setUserRole(null)
+    setClientUser(null)
+    setClientShop(null)
+    setLoading(false)
+  }
 
+  async function loadUserData(userId: string) {
+    // Load both shop memberships and client links in parallel
+    const [membersRes, clientUsersRes] = await Promise.all([
+      supabase.from('shop_members').select('*, shops(*)').eq('user_id', userId),
+      supabase.from('client_users').select('*, shops(*)').eq('user_id', userId),
+    ])
+
+    const members = membersRes.data
+    const clientUsers = clientUsersRes.data
+
+    // Check if user is a shop member
     if (members && members.length > 0) {
       const shopList = members
         .map((m) => (m as any).shops as Shop)
@@ -71,27 +93,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (savedMember && (savedMember as any).shops) {
         setCurrentShopState((savedMember as any).shops as Shop)
         setMembership(savedMember)
+        setUserRole(savedMember.role as UserRole)
       } else {
         setCurrentShopState((members[0] as any).shops as Shop)
         setMembership(members[0])
+        setUserRole(members[0].role as UserRole)
       }
-    } else {
-      setShops([])
-      setCurrentShopState(null)
-      setMembership(null)
     }
+
+    // Check if user is a client
+    if (clientUsers && clientUsers.length > 0) {
+      setClientUser(clientUsers[0])
+      setClientShop((clientUsers[0] as any).shops as Shop)
+      // If not a shop member, set role to client
+      if (!members || members.length === 0) {
+        setUserRole('client')
+      }
+    }
+
+    // If neither, leave role as null (new user, needs to create shop or register as client)
+    if ((!members || members.length === 0) && (!clientUsers || clientUsers.length === 0)) {
+      setUserRole(null)
+    }
+
     setLoading(false)
   }
 
   function setCurrentShop(shop: Shop, mem: ShopMember) {
     setCurrentShopState(shop)
     setMembership(mem)
+    setUserRole(mem.role as UserRole)
     localStorage.setItem('barberage_current_shop', shop.id)
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, session, currentShop, membership, shops, loading, setCurrentShop }}
+      value={{
+        user, session, currentShop, membership, shops, loading, setCurrentShop,
+        userRole, clientUser, clientShop,
+      }}
     >
       {children}
     </AuthContext.Provider>
