@@ -89,7 +89,7 @@ export function ProfessionalsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
       </div>
     )
   }
@@ -98,8 +98,8 @@ export function ProfessionalsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Profissionais</h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <h1 className="text-2xl font-bold text-[var(--color-text)]">Profissionais</h1>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
             Gerencie os barbeiros e profissionais
           </p>
         </div>
@@ -111,8 +111,8 @@ export function ProfessionalsPage() {
       {professionals.length === 0 ? (
         <Card>
           <div className="flex flex-col items-center py-12">
-            <UserCog className="mb-3 h-12 w-12 text-zinc-300 dark:text-zinc-600" />
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Nenhum profissional cadastrado</p>
+            <UserCog className="mb-3 h-12 w-12 text-[var(--color-text-muted)]" />
+            <p className="text-sm text-[var(--color-text-muted)]">Nenhum profissional cadastrado</p>
             <Button className="mt-4" onClick={openNew}>Cadastrar primeiro profissional</Button>
           </div>
         </Card>
@@ -124,15 +124,15 @@ export function ProfessionalsPage() {
                 <div className="flex items-center gap-3">
                   <div className={`flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold ${
                     prof.active
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                      : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-700 dark:text-zinc-500'
+                      ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary-hover)]'
+                      : 'bg-[var(--color-surface-muted)] text-[var(--color-text-muted)]'
                   }`}>
                     {prof.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{prof.name}</h3>
+                    <h3 className="font-semibold text-[var(--color-text)]">{prof.name}</h3>
                     {prof.phone && (
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">{prof.phone}</p>
+                      <p className="text-sm text-[var(--color-text-muted)]">{prof.phone}</p>
                     )}
                   </div>
                 </div>
@@ -141,12 +141,12 @@ export function ProfessionalsPage() {
                 </Badge>
               </div>
 
-              <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3 dark:border-zinc-700">
+              <div className="mt-4 flex items-center justify-between border-t border-[var(--color-border)] pt-3">
                 <button
                   onClick={() => toggleActive(prof)}
-                  className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                 >
-                  {prof.active ? <ToggleRight size={18} className="text-emerald-500" /> : <ToggleLeft size={18} />}
+                  {prof.active ? <ToggleRight size={18} className="text-[var(--color-text)]" /> : <ToggleLeft size={18} />}
                   {prof.active ? 'Desativar' : 'Ativar'}
                 </button>
                 <Button variant="ghost" size="sm" onClick={() => openEdit(prof)}>Editar</Button>
@@ -159,12 +159,12 @@ export function ProfessionalsPage() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingProfessional ? 'Editar profissional' : 'Novo profissional'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           {formError && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            <div className="rounded-lg bg-[var(--color-primary-soft)] p-3 text-sm text-[var(--color-primary)]">
               {formError}
             </div>
           )}
-          <Input label="Nome" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Nome do profissional" required />
-          <Input label="Telefone" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="(11) 99999-9999" />
+          <Input label="Nome" value={formName} onChange={(e) => setFormName(e.target.value)} required />
+          <Input label="Telefone" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} helperText="(11) 99999-9999" />
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button type="submit" loading={formLoading}>{editingProfessional ? 'Salvar' : 'Cadastrar'}</Button>
@@ -174,3 +174,5 @@ export function ProfessionalsPage() {
     </div>
   )
 }
+
+

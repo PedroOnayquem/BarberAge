@@ -6,6 +6,7 @@ import type { Tables } from '../types/database'
 type ShopMember = Tables<'shop_members'>
 type Shop = Tables<'shops'>
 type ClientUser = Tables<'client_users'>
+type Client = Tables<'clients'>
 
 export type UserRole = 'admin' | 'professional' | 'reception' | 'client' | null
 
@@ -20,6 +21,7 @@ interface AuthState {
   // Client-specific state
   userRole: UserRole
   clientUser: ClientUser | null
+  clientProfile: Client | null
   clientShop: Shop | null
   refreshUserData: () => Promise<void>
 }
@@ -35,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<UserRole>(null)
   const [clientUser, setClientUser] = useState<ClientUser | null>(null)
+  const [clientProfile, setClientProfile] = useState<Client | null>(null)
   const [clientShop, setClientShop] = useState<Shop | null>(null)
 
   useEffect(() => {
@@ -67,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMembership(null)
     setUserRole(null)
     setClientUser(null)
+    setClientProfile(null)
     setClientShop(null)
     setLoading(false)
   }
@@ -77,12 +81,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentShopState(null)
     setMembership(null)
     setClientUser(null)
+    setClientProfile(null)
     setClientShop(null)
 
     // Load both shop memberships and client links in parallel
     const [membersRes, clientUsersRes] = await Promise.all([
       supabase.from('shop_members').select('*, shops(*)').eq('user_id', userId),
-      supabase.from('client_users').select('*, shops(*)').eq('user_id', userId),
+      supabase.from('client_users').select('*, shops(*), clients(*)').eq('user_id', userId),
     ])
 
     const members = membersRes.data
@@ -113,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (clientUsers && clientUsers.length > 0) {
       setClientUser(clientUsers[0])
       setClientShop((clientUsers[0] as any).shops as Shop)
+      setClientProfile((clientUsers[0] as any).clients as Client)
       // If not a shop member, set role to client
       if (!members || members.length === 0) {
         setUserRole('client')
@@ -145,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user, session, currentShop, membership, shops, loading, setCurrentShop,
-        userRole, clientUser, clientShop, refreshUserData,
+        userRole, clientUser, clientProfile, clientShop, refreshUserData,
       }}
     >
       {children}

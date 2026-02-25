@@ -146,6 +146,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          avatar_url: string | null
           created_at: string
           email: string | null
           id: string
@@ -154,6 +155,7 @@ export type Database = {
           shop_id: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -162,6 +164,7 @@ export type Database = {
           shop_id: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -290,6 +293,7 @@ export type Database = {
       shops: {
         Row: {
           address: string | null
+          avatar_url: string | null
           created_at: string
           id: string
           name: string
@@ -299,6 +303,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          avatar_url?: string | null
           created_at?: string
           id?: string
           name: string
@@ -308,6 +313,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          avatar_url?: string | null
           created_at?: string
           id?: string
           name?: string

@@ -1,17 +1,17 @@
-import { forwardRef, type InputHTMLAttributes } from 'react'
+import { forwardRef, type TextareaHTMLAttributes } from 'react'
 import { OutlinedField } from './OutlinedField'
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string
   error?: string
   helperText?: string
 }
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ label, error, helperText, className, ...props }, _ref) => {
     return (
       <OutlinedField
-        as="input"
+        as="textarea"
         label={label}
         error={error}
         helperText={helperText}
@@ -22,4 +22,4 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   }
 )
 
-Input.displayName = 'Input'
+Textarea.displayName = 'Textarea'

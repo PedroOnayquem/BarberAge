@@ -4,8 +4,9 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
+import { DatePickerCard } from '../../components/ui/DatePickerCard'
 import { translateError } from '../../lib/errorMessages'
-import { format, addDays, isBefore, startOfDay } from 'date-fns'
+import { format, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { Tables } from '../../types/database'
 
@@ -152,7 +153,7 @@ export function ClientBookingPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#b11226] border-t-transparent" />
       </div>
     )
   }
@@ -160,14 +161,14 @@ export function ClientBookingPage() {
   if (bookingSuccess) {
     return (
       <div className="flex flex-col items-center py-16 text-center">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-          <Check className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#e9eef8]">
+          <Check className="h-8 w-8 text-[#0a1f44]" />
         </div>
-        <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Agendamento realizado!</h2>
-        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+        <h2 className="text-xl font-bold text-[#0a1f44]">Agendamento realizado!</h2>
+        <p className="mt-2 text-sm text-[#6b7a95]">
           {format(new Date(selectedSlot!.slot_start), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
         </p>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-[#6b7a95]">
           com {selectedProfessional?.name}
         </p>
         <Button className="mt-6" onClick={resetBooking}>Fazer novo agendamento</Button>
@@ -175,17 +176,11 @@ export function ClientBookingPage() {
     )
   }
 
-  // Date navigation
-  const dates: Date[] = []
-  for (let i = 0; i < 14; i++) {
-    dates.push(addDays(startOfDay(new Date()), i))
-  }
-
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Agendar</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <h1 className="text-2xl font-bold text-[#0a1f44]">Agendar</h1>
+        <p className="mt-1 text-sm text-[#6b7a95]">
           Escolha o serviço, profissional e horário
         </p>
       </div>
@@ -197,8 +192,8 @@ export function ClientBookingPage() {
             key={s}
             className={`h-1 flex-1 rounded-full ${
               i <= ['service', 'professional', 'datetime', 'confirm'].indexOf(step)
-                ? 'bg-emerald-500'
-                : 'bg-zinc-200 dark:bg-zinc-700'
+                ? 'bg-[#b11226]'
+                : 'bg-[#e8edf5]'
             }`}
           />
         ))}
@@ -207,7 +202,7 @@ export function ClientBookingPage() {
       {/* Step 1: Select services */}
       {step === 'service' && (
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+          <h2 className="text-lg font-semibold text-[#0a1f44]">
             <Scissors className="mr-2 inline h-5 w-5" />
             Selecione os serviços
           </h2>
@@ -219,22 +214,22 @@ export function ClientBookingPage() {
                 onClick={() => toggleService(service)}
                 className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition-all ${
                   isSelected
-                    ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-900/20'
-                    : 'border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600'
+                    ? 'border-[#b11226] bg-[#f1f4f8]'
+                    : 'border-[#dbe2ec] bg-white hover:border-[#cfd8e6]'
                 }`}
               >
                 <div>
-                  <p className="font-medium text-zinc-900 dark:text-zinc-100">{service.name}</p>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  <p className="font-medium text-[#0a1f44]">{service.name}</p>
+                  <p className="text-sm text-[#6b7a95]">
                     {service.duration_minutes} min
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                  <span className="font-semibold text-[#0a1f44]">
                     R$ {Number(service.price).toFixed(2)}
                   </span>
                   {isSelected && (
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#b11226]">
                       <Check className="h-4 w-4 text-white" />
                     </div>
                   )}
@@ -247,10 +242,10 @@ export function ClientBookingPage() {
             <Card>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  <p className="text-sm text-[#6b7a95]">
                     {selectedServices.length} serviço(s) · {totalDuration} min
                   </p>
-                  <p className="text-lg font-bold text-zinc-900 dark:text-white">
+                  <p className="text-lg font-bold text-[#0a1f44]">
                     R$ {totalPrice.toFixed(2)}
                   </p>
                 </div>
@@ -265,10 +260,10 @@ export function ClientBookingPage() {
       {step === 'professional' && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <button onClick={() => setStep('service')} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
+            <button onClick={() => setStep('service')} className="text-[#8b9bb8] hover:text-[#425a7f]">
               <ChevronLeft size={20} />
             </button>
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+            <h2 className="text-lg font-semibold text-[#0a1f44]">
               <User className="mr-2 inline h-5 w-5" />
               Escolha o profissional
             </h2>
@@ -277,13 +272,13 @@ export function ClientBookingPage() {
             <button
               key={prof.id}
               onClick={() => handleProfessionalSelect(prof)}
-              className="flex w-full items-center gap-4 rounded-xl border border-zinc-200 bg-white p-4 text-left transition-all hover:border-emerald-300 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-emerald-600"
+              className="flex w-full items-center gap-4 rounded-xl border border-[#dbe2ec] bg-white p-4 text-left transition-all hover:border-[#b11226] hover:shadow-sm"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e9eef8] text-lg font-bold text-[#0a1f44]">
                 {prof.name.charAt(0).toUpperCase()}
               </div>
               <div>
-                <p className="font-medium text-zinc-900 dark:text-zinc-100">{prof.name}</p>
+                <p className="font-medium text-[#0a1f44]">{prof.name}</p>
               </div>
             </button>
           ))}
@@ -294,55 +289,30 @@ export function ClientBookingPage() {
       {step === 'datetime' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <button onClick={() => setStep('professional')} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
+            <button onClick={() => setStep('professional')} className="text-[#8b9bb8] hover:text-[#425a7f]">
               <ChevronLeft size={20} />
             </button>
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+            <h2 className="text-lg font-semibold text-[#0a1f44]">
               <Clock className="mr-2 inline h-5 w-5" />
               Escolha data e horário
             </h2>
           </div>
 
-          {/* Date selector */}
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {dates.map((date) => {
-              const isSelected = format(date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd')
-              const isPast = isBefore(date, startOfDay(new Date()))
-              return (
-                <button
-                  key={date.toISOString()}
-                  onClick={() => !isPast && handleDateChange(date)}
-                  disabled={isPast}
-                  className={`flex min-w-[72px] flex-col items-center rounded-xl border px-3 py-2 text-center transition-all ${
-                    isSelected
-                      ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-900/20'
-                      : isPast
-                        ? 'border-zinc-100 bg-zinc-50 text-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-600'
-                        : 'border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800'
-                  }`}
-                >
-                  <span className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
-                    {format(date, 'EEE', { locale: ptBR })}
-                  </span>
-                  <span className={`text-lg font-bold ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-900 dark:text-zinc-100'}`}>
-                    {format(date, 'dd')}
-                  </span>
-                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                    {format(date, 'MMM', { locale: ptBR })}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          <DatePickerCard
+            value={selectedDate}
+            minDate={startOfDay(new Date())}
+            locale={ptBR}
+            onChange={handleDateChange}
+          />
 
           {/* Time slots */}
           {slotsLoading ? (
             <div className="flex items-center justify-center py-10">
-              <div className="h-6 w-6 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+              <div className="h-6 w-6 animate-spin rounded-full border-4 border-[#b11226] border-t-transparent" />
             </div>
           ) : slots.length === 0 ? (
             <Card>
-              <p className="py-6 text-center text-sm text-zinc-400 dark:text-zinc-500">
+              <p className="py-6 text-center text-sm text-[#8b9bb8]">
                 Nenhum horário disponível nesta data
               </p>
             </Card>
@@ -356,8 +326,8 @@ export function ClientBookingPage() {
                     onClick={() => setSelectedSlot(slot)}
                     className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
                       isSelected
-                        ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
-                        : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+                        ? 'border-[#b11226] bg-[#f1f4f8] text-[#0a1f44]'
+                        : 'border-[#dbe2ec] bg-white text-[#1f3760] hover:border-[#cfd8e6]'
                     }`}
                   >
                     {format(new Date(slot.slot_start), 'HH:mm')}
@@ -379,43 +349,43 @@ export function ClientBookingPage() {
       {step === 'confirm' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <button onClick={() => setStep('datetime')} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
+            <button onClick={() => setStep('datetime')} className="text-[#8b9bb8] hover:text-[#425a7f]">
               <ChevronLeft size={20} />
             </button>
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Confirmar agendamento</h2>
+            <h2 className="text-lg font-semibold text-[#0a1f44]">Confirmar agendamento</h2>
           </div>
 
           <Card>
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-medium uppercase text-zinc-400 dark:text-zinc-500">Serviços</p>
+                <p className="text-xs font-medium uppercase text-[#8b9bb8]">Serviços</p>
                 {selectedServices.map((s) => (
-                  <p key={s.id} className="text-sm text-zinc-900 dark:text-zinc-100">
+                  <p key={s.id} className="text-sm text-[#0a1f44]">
                     {s.name} — R$ {Number(s.price).toFixed(2)}
                   </p>
                 ))}
               </div>
               <div>
-                <p className="text-xs font-medium uppercase text-zinc-400 dark:text-zinc-500">Profissional</p>
-                <p className="text-sm text-zinc-900 dark:text-zinc-100">{selectedProfessional?.name}</p>
+                <p className="text-xs font-medium uppercase text-[#8b9bb8]">Profissional</p>
+                <p className="text-sm text-[#0a1f44]">{selectedProfessional?.name}</p>
               </div>
               <div>
-                <p className="text-xs font-medium uppercase text-zinc-400 dark:text-zinc-500">Data e horário</p>
-                <p className="text-sm text-zinc-900 dark:text-zinc-100">
+                <p className="text-xs font-medium uppercase text-[#8b9bb8]">Data e horário</p>
+                <p className="text-sm text-[#0a1f44]">
                   {selectedSlot && format(new Date(selectedSlot.slot_start), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
                 </p>
               </div>
-              <div className="border-t border-zinc-100 pt-3 dark:border-zinc-700">
+              <div className="border-t border-[#e8edf5] pt-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Total ({totalDuration} min)</p>
-                  <p className="text-lg font-bold text-zinc-900 dark:text-white">R$ {totalPrice.toFixed(2)}</p>
+                  <p className="text-sm text-[#6b7a95]">Total ({totalDuration} min)</p>
+                  <p className="text-lg font-bold text-[#0a1f44]">R$ {totalPrice.toFixed(2)}</p>
                 </div>
               </div>
             </div>
           </Card>
 
           {bookingError && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            <div className="rounded-lg bg-[#fdecef] p-3 text-sm text-[#b11226]">
               {bookingError}
             </div>
           )}
@@ -428,3 +398,6 @@ export function ClientBookingPage() {
     </div>
   )
 }
+
+
+

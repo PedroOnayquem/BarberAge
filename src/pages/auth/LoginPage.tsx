@@ -1,12 +1,44 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type InputHTMLAttributes } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Armchair, Building2, User } from 'lucide-react'
+import { Armchair, Building2, User, ArrowLeft, Sparkles } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
 import { translateError } from '../../lib/errorMessages'
 
 type LoginMode = 'select' | 'shop' | 'client'
+
+interface PremiumInputProps extends InputHTMLAttributes<HTMLInputElement> {
+  label: string
+}
+
+function PremiumInput({ label, value, onChange, type = 'text', ...props }: PremiumInputProps) {
+  const [focused, setFocused] = useState(false)
+  const hasValue = typeof value === 'string' && value.length > 0
+  const floating = focused || hasValue
+
+  return (
+    <div className="relative pt-6">
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder=" "
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className="w-full border-0 border-b border-[#dbe2ec] bg-transparent pb-2.5 text-base text-[#0a1f44] outline-none transition-colors duration-300 focus:border-[#1e3a8a]"
+        {...props}
+      />
+      <label
+        className={`pointer-events-none absolute left-0 transition-all duration-200 ${
+          floating
+            ? 'top-0 text-[11px] font-medium uppercase tracking-[0.14em] text-[#b11226]'
+            : 'top-6 text-sm text-[#6b7a95]'
+        }`}
+      >
+        {label}
+      </label>
+    </div>
+  )
+}
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -15,6 +47,12 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setVisible(true))
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -35,7 +73,6 @@ export function LoginPage() {
     }
 
     if (mode === 'shop') {
-      // Check if user is a shop member
       const { data: members } = await supabase
         .from('shop_members')
         .select('id')
@@ -48,9 +85,7 @@ export function LoginPage() {
         setLoading(false)
         return
       }
-      // AuthContext will handle the redirect
     } else {
-      // Client login — check if user is a client
       const { data: clientUsers } = await supabase
         .from('client_users')
         .select('id')
@@ -69,130 +104,128 @@ export function LoginPage() {
     setLoading(false)
   }
 
-  if (mode === 'select') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-900/30">
-              <Armchair className="h-8 w-8 text-amber-600 dark:text-amber-500" />
-            </div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">BarberAge</h1>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Como deseja entrar?</p>
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f5f3ee] px-6 py-10">
+      <main
+        className={`relative z-10 w-full max-w-[540px] rounded-2xl border border-[#dbe2ec] bg-white px-7 py-10 shadow-[0_12px_30px_rgba(10,31,68,0.08)] transition-all duration-700 sm:px-10 ${
+          visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+        }`}
+      >
+        <div className="mb-12 text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#dbe2ec] bg-[#e9eef8] text-[#0a1f44]">
+            <Armchair size={30} />
           </div>
+          <h1 className="text-[26px] font-semibold uppercase tracking-[0.34em] text-[#0a1f44] sm:text-[30px]">BARBERAGE</h1>
+          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[#6b7a95]">Bem-vindo de volta</p>
+        </div>
 
-          <div className="space-y-3">
+        {mode === 'select' ? (
+          <section className="space-y-4">
+            <p className="text-center text-sm text-[#6b7a95]">Selecione seu perfil de acesso</p>
+
             <button
               onClick={() => setMode('shop')}
-              className="flex w-full items-center gap-4 rounded-xl border border-zinc-200 bg-white p-5 text-left shadow-sm transition-all hover:border-amber-300 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-amber-600"
+              className="flex w-full items-center justify-between rounded-xl border border-[#dbe2ec] bg-white px-5 py-4 text-left text-[#0a1f44] transition-all duration-300 hover:border-[#1e3a8a] hover:bg-[#f8fafc]"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
-                <Building2 className="h-6 w-6 text-amber-600 dark:text-amber-500" />
+              <div className="flex items-center gap-3">
+                <Building2 size={18} className="text-[#0a1f44]" />
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.08em]">Barbearia</p>
+                  <p className="text-xs text-[#6b7a95]">Painel administrativo</p>
+                </div>
               </div>
-              <div>
-                <p className="font-semibold text-zinc-900 dark:text-white">Entrar como Barbearia</p>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">Acesse o painel administrativo</p>
-              </div>
+              <Sparkles size={15} className="text-[#b11226]" />
             </button>
 
             <button
               onClick={() => setMode('client')}
-              className="flex w-full items-center gap-4 rounded-xl border border-zinc-200 bg-white p-5 text-left shadow-sm transition-all hover:border-amber-300 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-amber-600"
+              className="flex w-full items-center justify-between rounded-xl border border-[#dbe2ec] bg-white px-5 py-4 text-left text-[#0a1f44] transition-all duration-300 hover:border-[#1e3a8a] hover:bg-[#f8fafc]"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
-                <User className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
+              <div className="flex items-center gap-3">
+                <User size={18} className="text-[#0a1f44]" />
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.08em]">Cliente</p>
+                  <p className="text-xs text-[#6b7a95]">Agendamento online</p>
+                </div>
               </div>
-              <div>
-                <p className="font-semibold text-zinc-900 dark:text-white">Entrar como Cliente</p>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">Agende serviços na sua barbearia</p>
-              </div>
+              <Sparkles size={15} className="text-[#b11226]" />
             </button>
-          </div>
 
-          <p className="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-            Não tem conta?{' '}
-            <Link to="/register" className="font-medium text-amber-600 hover:text-amber-700 dark:text-amber-500">
-              Cadastre-se como barbearia
-            </Link>
-            {' · '}
-            <Link to="/cliente/register" className="font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-500">
-              Cadastre-se como cliente
-            </Link>
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${
-            mode === 'shop'
-              ? 'bg-amber-100 dark:bg-amber-900/30'
-              : 'bg-emerald-100 dark:bg-emerald-900/30'
-          }`}>
-            {mode === 'shop'
-              ? <Building2 className="h-8 w-8 text-amber-600 dark:text-amber-500" />
-              : <User className="h-8 w-8 text-emerald-600 dark:text-emerald-500" />
-            }
-          </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-            {mode === 'shop' ? 'Acesso Barbearia' : 'Acesso Cliente'}
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Entre na sua conta</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
-          {error && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
-              {error}
+            <p className="pt-3 text-center text-xs text-[#6b7a95]">
+              Nao tem conta?{' '}
+              <Link to="/register" className="font-semibold uppercase tracking-[0.08em] text-[#1e3a8a] hover:text-[#0a1f44]">
+                Barbearia
+              </Link>
+              {' · '}
+              <Link to="/cliente/register" className="font-semibold uppercase tracking-[0.08em] text-[#1e3a8a] hover:text-[#0a1f44]">
+                Cliente
+              </Link>
+            </p>
+          </section>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="mb-1 text-center">
+              <p className="text-xs uppercase tracking-[0.18em] text-[#1e3a8a]">{mode === 'shop' ? 'Acesso Barbearia' : 'Acesso Cliente'}</p>
             </div>
-          )}
 
-          <Input
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="seu@email.com"
-            required
-          />
+            {error && <div className="rounded-lg border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-sm text-[#b91c1c]">{error}</div>}
 
-          <Input
-            label="Senha"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-          />
+            <PremiumInput
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
 
-          <Button type="submit" loading={loading} className="w-full">
-            Entrar
-          </Button>
+            <PremiumInput
+              label="Senha"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
 
-          <div className="flex items-center justify-between text-sm">
             <button
-              type="button"
-              onClick={() => { setMode('select'); setError('') }}
-              className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              type="submit"
+              disabled={loading}
+              className="group relative mt-2 w-full overflow-hidden rounded-xl bg-[#b11226] px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-white transition-all duration-300 hover:bg-[#8f0e1f] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              ← Voltar
+              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.38),transparent)] transition-transform duration-700 group-hover:translate-x-full" />
+              <span className="relative">{loading ? 'Entrando...' : 'Entrar'}</span>
             </button>
-            {mode === 'shop' ? (
-              <Link to="/register" className="font-medium text-amber-600 hover:text-amber-700 dark:text-amber-500">
-                Criar conta
-              </Link>
-            ) : (
-              <Link to="/cliente/register" className="font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-500">
-                Criar conta
-              </Link>
-            )}
-          </div>
-        </form>
-      </div>
+
+            <p className="text-center text-xs text-[#6b7a95]">
+              Nao tem conta?{' '}
+              {mode === 'shop' ? (
+                <Link to="/register" className="font-semibold uppercase tracking-[0.08em] text-[#1e3a8a] hover:text-[#0a1f44]">
+                  Criar conta
+                </Link>
+              ) : (
+                <Link to="/cliente/register" className="font-semibold uppercase tracking-[0.08em] text-[#1e3a8a] hover:text-[#0a1f44]">
+                  Criar conta
+                </Link>
+              )}
+            </p>
+
+            <div className="pt-1 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('select')
+                  setError('')
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6b7a95] transition-colors hover:text-[#0a1f44]"
+              >
+                <ArrowLeft size={14} />
+                Voltar
+              </button>
+            </div>
+          </form>
+        )}
+      </main>
     </div>
   )
 }

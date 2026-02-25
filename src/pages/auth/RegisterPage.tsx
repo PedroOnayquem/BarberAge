@@ -1,10 +1,42 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type InputHTMLAttributes } from 'react'
 import { Link } from 'react-router-dom'
-import { Armchair, CheckCircle } from 'lucide-react'
+import { Armchair, CheckCircle, ArrowLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
 import { translateError } from '../../lib/errorMessages'
+
+interface PremiumInputProps extends InputHTMLAttributes<HTMLInputElement> {
+  label: string
+}
+
+function PremiumInput({ label, value, onChange, type = 'text', ...props }: PremiumInputProps) {
+  const [focused, setFocused] = useState(false)
+  const hasValue = typeof value === 'string' && value.length > 0
+  const floating = focused || hasValue
+
+  return (
+    <div className="relative pt-6">
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder=" "
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className="w-full border-0 border-b border-[#dbe2ec] bg-transparent pb-2.5 text-base text-[#0a1f44] outline-none transition-colors duration-300 focus:border-[#1e3a8a]"
+        {...props}
+      />
+      <label
+        className={`pointer-events-none absolute left-0 transition-all duration-200 ${
+          floating
+            ? 'top-0 text-[11px] font-medium uppercase tracking-[0.14em] text-[#b11226]'
+            : 'top-6 text-sm text-[#6b7a95]'
+        }`}
+      >
+        {label}
+      </label>
+    </div>
+  )
+}
 
 export function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -13,6 +45,12 @@ export function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setVisible(true))
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -32,8 +70,6 @@ export function RegisterPage() {
     const { data, error } = await supabase.auth.signUp({ email, password })
 
     if (error) {
-      // If rate limited (429), the user may already exist from a previous attempt.
-      // Try logging in directly since our DB trigger auto-confirms users.
       if (error.status === 429) {
         const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
         if (!loginError) {
@@ -50,106 +86,100 @@ export function RegisterPage() {
       return
     }
 
-    // If session exists immediately (auto-confirm trigger worked), redirect
     if (data.session) {
       window.location.href = '/create-shop'
       return
     }
 
-    // User created but no session yet — try logging in (trigger should have confirmed)
     const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
     if (!loginError) {
       window.location.href = '/create-shop'
       return
     }
 
-    // Fallback: show email verification message
     setSuccess(true)
     setLoading(false)
   }
 
-  if (success) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
-        <div className="w-full max-w-sm">
-          <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-              <CheckCircle className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Verifique seu email</h2>
-            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-              Enviamos um link de confirmação para <strong className="text-zinc-700 dark:text-zinc-200">{email}</strong>.
-              Clique no link para ativar sua conta.
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f5f3ee] px-6 py-10">
+      <main
+        className={`relative z-10 w-full max-w-[560px] rounded-2xl border border-[#dbe2ec] bg-white px-7 py-10 shadow-[0_12px_30px_rgba(10,31,68,0.08)] transition-all duration-700 sm:px-10 ${
+          visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+        }`}
+      >
+        <div className="mb-12 text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#dbe2ec] bg-[#e9eef8] text-[#0a1f44]">
+            {success ? <CheckCircle size={30} /> : <Armchair size={30} />}
+          </div>
+          <h1 className="text-[26px] font-semibold uppercase tracking-[0.34em] text-[#0a1f44] sm:text-[30px]">BARBERAGE</h1>
+          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[#6b7a95]">
+            {success ? 'Verifique seu email' : 'Cadastro Barbearia'}
+          </p>
+        </div>
+
+        {success ? (
+          <section className="space-y-6 text-center">
+            <p className="text-sm text-[#425a7f]">
+              Enviamos um link de confirmação para <strong className="text-[#0a1f44]">{email}</strong>. Clique no link para ativar sua conta.
             </p>
             <Link
               to="/login"
-              className="mt-6 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-500"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6b7a95] transition-colors hover:text-[#0a1f44]"
             >
+              <ArrowLeft size={14} />
               Voltar para o login
             </Link>
-          </div>
-        </div>
-      </div>
-    )
-  }
+          </section>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && <div className="rounded-lg border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-sm text-[#b91c1c]">{error}</div>}
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-900/30">
-            <Armchair className="h-8 w-8 text-amber-600 dark:text-amber-500" />
-          </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Criar conta</h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Comece a gerenciar sua barbearia</p>
-        </div>
+            <PremiumInput
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
 
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
-          {error && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
-              {error}
-            </div>
-          )}
+            <PremiumInput
+              label="Senha"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
 
-          <Input
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="seu@email.com"
-            required
-          />
+            <PremiumInput
+              label="Confirmar senha"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
 
-          <Input
-            label="Senha"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-          />
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative mt-2 w-full overflow-hidden rounded-xl bg-[#b11226] px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-white transition-all duration-300 hover:bg-[#8f0e1f] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.38),transparent)] transition-transform duration-700 group-hover:translate-x-full" />
+              <span className="relative">{loading ? 'Cadastrando...' : 'Cadastrar'}</span>
+            </button>
 
-          <Input
-            label="Confirmar senha"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-          />
-
-          <Button type="submit" loading={loading} className="w-full">
-            Cadastrar
-          </Button>
-
-          <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-            Já tem conta?{' '}
-            <Link to="/login" className="font-medium text-amber-600 hover:text-amber-700 dark:text-amber-500">
-              Entrar
-            </Link>
-          </p>
-        </form>
-      </div>
+            <p className="text-center text-xs text-[#6b7a95]">
+              Ja tem conta?{' '}
+              <Link to="/login" className="font-semibold uppercase tracking-[0.08em] text-[#1e3a8a] hover:text-[#0a1f44]">
+                Entrar
+              </Link>
+            </p>
+          </form>
+        )}
+      </main>
     </div>
   )
 }

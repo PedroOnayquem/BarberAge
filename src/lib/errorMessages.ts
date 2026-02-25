@@ -11,6 +11,10 @@ const errorMap: Record<string, string> = {
   'New password should be different from the old password': 'A nova senha deve ser diferente da anterior',
   'Auth session missing!': 'Sessão expirada. Faça login novamente.',
   'Email address cannot be used as it is not authorized': 'Este endereço de email não é permitido.',
+  'duplicate key value violates unique constraint "services_shop_id_name_key"':
+    'Já existe um serviço com esse nome na sua barbearia.',
+  'duplicate key value violates unique constraint':
+    'Registro duplicado. Verifique os dados e tente novamente.',
 }
 
 export function translateError(message: string): string {
@@ -26,6 +30,10 @@ export function translateError(message: string): string {
 
   if (message.includes('over_email_send_rate_limit')) {
     return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'
+  }
+
+  if (message.includes('23505')) {
+    return 'Registro duplicado. Verifique os dados e tente novamente.'
   }
 
   return message

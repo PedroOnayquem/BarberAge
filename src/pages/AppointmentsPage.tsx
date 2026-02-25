@@ -5,8 +5,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
-import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
+import { Textarea } from '../components/ui/Textarea'
+import { DatePickerField } from '../components/ui/DatePickerField'
+import { TimePickerField } from '../components/ui/TimePickerField'
 import { Card } from '../components/ui/Card'
 import { translateError } from '../lib/errorMessages'
 import {
@@ -209,7 +211,7 @@ export function AppointmentsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
       </div>
     )
   }
@@ -218,8 +220,8 @@ export function AppointmentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Agenda</h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <h1 className="text-2xl font-bold text-[var(--color-text)]">Agenda</h1>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
             Gerencie os agendamentos da barbearia
           </p>
         </div>
@@ -229,26 +231,33 @@ export function AppointmentsPage() {
       </div>
 
       {/* Week navigation */}
-      <Card className="!p-4">
-        <div className="flex items-center justify-between">
+      <Card className="!rounded-2xl !p-4">
+        <div className="grid grid-cols-[40px_1fr_40px] items-center gap-2">
           <button
             onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}
-            className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]/40 focus-visible:outline-offset-2"
+            aria-label="Semana anterior"
           >
             <ChevronLeft size={20} />
           </button>
-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            {format(currentWeekStart, "dd 'de' MMM", { locale: ptBR })} — {format(weekEnd, "dd 'de' MMM yyyy", { locale: ptBR })}
-          </span>
+          <div className="text-center">
+            <p className="text-sm font-bold capitalize text-[var(--color-text)]">
+              {format(currentWeekStart, 'MMMM, yyyy', { locale: ptBR })}
+            </p>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              {format(currentWeekStart, "dd 'de' MMM", { locale: ptBR })} — {format(weekEnd, "dd 'de' MMM", { locale: ptBR })}
+            </p>
+          </div>
           <button
             onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}
-            className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]/40 focus-visible:outline-offset-2"
+            aria-label="Próxima semana"
           >
             <ChevronRight size={20} />
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-7 gap-1">
+        <div className="mt-3 grid grid-cols-7 gap-2">
           {weekDays.map((day) => {
             const isSelected = isSameDay(day, selectedDate)
             const isToday = isSameDay(day, new Date())
@@ -257,20 +266,22 @@ export function AppointmentsPage() {
               <button
                 key={day.toISOString()}
                 onClick={() => setSelectedDate(day)}
-                className={`flex flex-col items-center rounded-xl p-2 transition-colors ${
+                className={`flex flex-col items-center rounded-2xl border border-transparent p-2.5 transition-colors ${
                   isSelected
-                    ? 'bg-amber-600 text-white dark:bg-amber-500'
+                    ? 'bg-[var(--color-primary)] text-white'
                     : isToday
-                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
-                    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                    ? 'border-[color-mix(in_srgb,var(--color-primary)_25%,var(--color-border))] text-[var(--color-text)]'
+                    : 'text-[var(--color-text)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)]'
                 }`}
               >
-                <span className={`text-xs font-medium ${isMobile ? 'uppercase' : 'capitalize'}`}>
+                <span className={`text-[10px] font-semibold tracking-[0.08em] ${isMobile ? 'uppercase' : 'capitalize'} ${isSelected ? 'text-white/85' : 'text-[var(--color-text-muted)]'}`}>
                   {getWeekdayLabel(day)}
                 </span>
-                <span className="mt-1 text-lg font-bold">{format(day, 'dd')}</span>
+                <span className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-base font-bold">
+                  {format(day, 'dd')}
+                </span>
                 {dayApts.length > 0 && (
-                  <span className={`mt-1 text-xs ${isSelected ? 'text-amber-100' : 'text-zinc-400'}`}>
+                  <span className={`mt-1 text-[10px] ${isSelected ? 'text-white/85' : 'text-[var(--color-text-muted)]'}`}>
                     {dayApts.length} agend.
                   </span>
                 )}
@@ -282,12 +293,12 @@ export function AppointmentsPage() {
 
       {/* Day appointments */}
       <Card>
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
           {format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
         </h2>
 
         {dayAppointments.length === 0 ? (
-          <p className="py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
+          <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
             Nenhum agendamento neste dia
           </p>
         ) : (
@@ -302,26 +313,26 @@ export function AppointmentsPage() {
                 <div
                   key={apt.id}
                   onClick={() => { setSelectedAppointment(apt); setStatusModalOpen(true) }}
-                  className="flex cursor-pointer items-center justify-between rounded-lg border border-zinc-100 p-4 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-700/50"
+                  className="flex cursor-pointer items-center justify-between rounded-lg border border-[var(--color-border)] p-4 transition-colors hover:bg-[var(--color-surface-muted)]"
                 >
                   <div className="flex items-center gap-4">
                     <div className="text-center">
-                      <p className="text-lg font-bold text-zinc-900 dark:text-white">
+                      <p className="text-lg font-bold text-[var(--color-text)]">
                         {format(parseISO(apt.start_at), 'HH:mm')}
                       </p>
-                      <p className="text-xs text-zinc-400">
+                      <p className="text-xs text-[var(--color-text-muted)]">
                         {format(parseISO(apt.end_at), 'HH:mm')}
                       </p>
                     </div>
                     <div>
-                      <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                      <p className="font-medium text-[var(--color-text)]">
                         {apt.clients?.name || 'Cliente'}
                       </p>
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                      <p className="text-sm text-[var(--color-text-muted)]">
                         {apt.professionals?.name} {srvNames ? `• ${srvNames}` : ''}
                       </p>
                       {apt.notes && (
-                        <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{apt.notes}</p>
+                        <p className="mt-1 text-xs text-[var(--color-text-muted)]">{apt.notes}</p>
                       )}
                     </div>
                   </div>
@@ -337,46 +348,44 @@ export function AppointmentsPage() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Novo agendamento" size="lg">
         <div className="space-y-4">
           {formError && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            <div className="rounded-lg bg-[var(--color-primary-soft)] p-3 text-sm text-[var(--color-primary)]">
               {formError}
             </div>
           )}
 
           <Select label="Cliente" value={formClientId} onChange={(e) => setFormClientId(e.target.value)} required>
-            <option value="">Selecione um cliente</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </Select>
 
           <Select label="Profissional" value={formProfessionalId} onChange={(e) => setFormProfessionalId(e.target.value)} required>
-            <option value="">Selecione um profissional</option>
             {professionals.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </Select>
 
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Serviços</label>
+            <label className="block text-sm font-medium text-[var(--color-text)]">Serviços</label>
             <div className="grid grid-cols-2 gap-2">
               {services.map((s) => (
                 <label
                   key={s.id}
                   className={`flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-sm transition-colors ${
                     formServiceIds.includes(s.id)
-                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
-                      : 'border-zinc-200 hover:border-zinc-300 dark:border-zinc-600 dark:hover:border-zinc-500'
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)]'
+                      : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]'
                   }`}
                 >
                   <input
                     type="checkbox"
                     checked={formServiceIds.includes(s.id)}
                     onChange={() => toggleServiceId(s.id)}
-                    className="accent-amber-600"
+                    className="native-check"
                   />
                   <div>
-                    <p className="font-medium text-zinc-900 dark:text-zinc-100">{s.name}</p>
-                    <p className="text-xs text-zinc-500">{s.duration_minutes}min • R$ {Number(s.price).toFixed(2)}</p>
+                    <p className="font-medium text-[var(--color-text)]">{s.name}</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">{s.duration_minutes}min • R$ {Number(s.price).toFixed(2)}</p>
                   </div>
                 </label>
               ))}
@@ -384,11 +393,21 @@ export function AppointmentsPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Data" type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} required />
-            <Input label="Horário" type="time" value={formTime} onChange={(e) => setFormTime(e.target.value)} required />
+            <DatePickerField
+              label="Data"
+              value={formDate}
+              onChange={setFormDate}
+              minDate={new Date()}
+            />
+            <TimePickerField label="Horário" value={formTime} onChange={setFormTime} />
           </div>
 
-          <Input label="Observações" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} placeholder="Opcional" />
+          <Textarea
+            label="Observações"
+            value={formNotes}
+            onChange={(e) => setFormNotes(e.target.value)}
+            helperText="Opcional"
+          />
 
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
@@ -401,7 +420,7 @@ export function AppointmentsPage() {
       <Modal open={statusModalOpen} onClose={() => setStatusModalOpen(false)} title="Atualizar status" size="sm">
         {selectedAppointment && (
           <div className="space-y-3">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm text-[var(--color-text-muted)]">
               {selectedAppointment.clients?.name} — {format(parseISO(selectedAppointment.start_at), 'HH:mm')}
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -422,3 +441,5 @@ export function AppointmentsPage() {
     </div>
   )
 }
+
+

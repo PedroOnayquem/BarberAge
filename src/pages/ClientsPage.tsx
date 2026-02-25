@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Plus, Search, Phone, Mail } from 'lucide-react'
+import { Plus, Phone, Mail } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/ui/Button'
@@ -9,6 +9,7 @@ import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { format, parseISO } from 'date-fns'
 import { translateError } from '../lib/errorMessages'
+import { CLIENT_AVATARS_BUCKET, getSignedAvatarUrl } from '../lib/avatarStorage'
 import type { Tables } from '../types/database'
 
 type Client = Tables<'clients'>
@@ -27,6 +28,7 @@ export function ClientsPage() {
   const [detailClient, setDetailClient] = useState<Client | null>(null)
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [clientAppointments, setClientAppointments] = useState<any[]>([])
+  const [avatarByClientId, setAvatarByClientId] = useState<Record<string, string>>({})
 
   const [formName, setFormName] = useState('')
   const [formPhone, setFormPhone] = useState('')
@@ -55,7 +57,22 @@ export function ClientsPage() {
     }))
 
     setClients(clientsWithCount)
+    await loadClientAvatars(clientsWithCount)
     setLoading(false)
+  }
+
+  async function loadClientAvatars(rows: ClientWithCount[]) {
+    const entries = await Promise.all(
+      rows.map(async (client) => {
+        const signed = await getSignedAvatarUrl(CLIENT_AVATARS_BUCKET, client.avatar_url)
+        return [client.id, signed] as const
+      })
+    )
+    const map: Record<string, string> = {}
+    entries.forEach(([id, signed]) => {
+      if (signed) map[id] = signed
+    })
+    setAvatarByClientId(map)
   }
 
   function openNew() {
@@ -125,7 +142,7 @@ export function ClientsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
       </div>
     )
   }
@@ -134,8 +151,8 @@ export function ClientsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Clientes</h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <h1 className="text-2xl font-bold text-[var(--color-text)]">Clientes</h1>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
             {clients.length} clientes cadastrados
           </p>
         </div>
@@ -144,20 +161,15 @@ export function ClientsPage() {
         </Button>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-        <input
-          type="text"
-          placeholder="Buscar por nome, telefone ou email..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-lg border border-zinc-300 bg-white py-2.5 pl-10 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-        />
-      </div>
+      <Input
+        label="Buscar clientes"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
 
       {filtered.length === 0 ? (
         <Card>
-          <p className="py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
+          <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
             Nenhum cliente encontrado
           </p>
         </Card>
@@ -166,18 +178,31 @@ export function ClientsPage() {
           {filtered.map((client) => (
             <Card key={client.id} className="cursor-pointer transition-shadow hover:shadow-md">
               <div onClick={() => openDetail(client)}>
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{client.name}</h3>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {avatarByClientId[client.id] ? (
+                      <img
+                        src={avatarByClientId[client.id]}
+                        alt={`Avatar de ${client.name}`}
+                        className="h-9 w-9 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-surface-muted)] text-xs font-bold text-[var(--color-text)]">
+                        {client.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <h3 className="font-semibold text-[var(--color-text)]">{client.name}</h3>
+                  </div>
                   <Badge>{client.appointment_count} agend.</Badge>
                 </div>
                 <div className="mt-3 space-y-1">
                   {client.phone && (
-                    <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
                       <Phone size={14} /> {client.phone}
                     </div>
                   )}
                   {client.email && (
-                    <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
                       <Mail size={14} /> {client.email}
                     </div>
                   )}
@@ -197,13 +222,13 @@ export function ClientsPage() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingClient ? 'Editar cliente' : 'Novo cliente'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           {formError && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            <div className="rounded-lg bg-[var(--color-primary-soft)] p-3 text-sm text-[var(--color-primary)]">
               {formError}
             </div>
           )}
           <Input label="Nome" value={formName} onChange={(e) => setFormName(e.target.value)} required />
-          <Input label="Telefone" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="(11) 99999-9999" />
-          <Input label="Email" type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} placeholder="email@exemplo.com" />
+          <Input label="Telefone" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} helperText="(11) 99999-9999" />
+          <Input label="Email" type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} helperText="email@exemplo.com" />
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button type="submit" loading={formLoading}>{editingClient ? 'Salvar' : 'Cadastrar'}</Button>
@@ -217,34 +242,34 @@ export function ClientsPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-zinc-500 dark:text-zinc-400">Telefone</p>
-                <p className="font-medium text-zinc-900 dark:text-zinc-100">{detailClient.phone || '—'}</p>
+                <p className="text-[var(--color-text-muted)]">Telefone</p>
+                <p className="font-medium text-[var(--color-text)]">{detailClient.phone || '—'}</p>
               </div>
               <div>
-                <p className="text-zinc-500 dark:text-zinc-400">Email</p>
-                <p className="font-medium text-zinc-900 dark:text-zinc-100">{detailClient.email || '—'}</p>
+                <p className="text-[var(--color-text-muted)]">Email</p>
+                <p className="font-medium text-[var(--color-text)]">{detailClient.email || '—'}</p>
               </div>
               <div>
-                <p className="text-zinc-500 dark:text-zinc-400">Cadastrado em</p>
-                <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                <p className="text-[var(--color-text-muted)]">Cadastrado em</p>
+                <p className="font-medium text-[var(--color-text)]">
                   {format(parseISO(detailClient.created_at), 'dd/MM/yyyy')}
                 </p>
               </div>
             </div>
 
             <div>
-              <h3 className="mb-2 font-semibold text-zinc-900 dark:text-zinc-100">Histórico de agendamentos</h3>
+              <h3 className="mb-2 font-semibold text-[var(--color-text)]">Histórico de agendamentos</h3>
               {clientAppointments.length === 0 ? (
-                <p className="text-sm text-zinc-400">Nenhum agendamento</p>
+                <p className="text-sm text-[var(--color-text-muted)]">Nenhum agendamento</p>
               ) : (
                 <div className="max-h-60 space-y-2 overflow-y-auto">
                   {clientAppointments.map((apt: any) => (
-                    <div key={apt.id} className="flex items-center justify-between rounded-lg border border-zinc-100 p-3 dark:border-zinc-700">
+                    <div key={apt.id} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] p-3">
                       <div>
-                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <p className="text-sm font-medium text-[var(--color-text)]">
                           {format(parseISO(apt.start_at), 'dd/MM/yyyy HH:mm')}
                         </p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <p className="text-xs text-[var(--color-text-muted)]">
                           {apt.professionals?.name} • {apt.appointment_services?.map((as_: any) => as_.services?.name).filter(Boolean).join(', ')}
                         </p>
                       </div>
@@ -262,3 +287,6 @@ export function ClientsPage() {
     </div>
   )
 }
+
+
+

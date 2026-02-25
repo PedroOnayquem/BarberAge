@@ -57,19 +57,19 @@ export function CreateShopPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
+    <div className="flex min-h-screen items-center justify-center bg-white px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-900/30">
-            <Armchair className="h-8 w-8 text-amber-600 dark:text-amber-500" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fdecef]">
+            <Armchair className="h-8 w-8 text-[#b11226]" />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Criar barbearia</h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Configure sua barbearia para começar</p>
+          <h1 className="text-2xl font-bold text-[#0a1f44]">Criar barbearia</h1>
+          <p className="mt-1 text-sm text-[#6b7a95]">Configure sua barbearia para começar</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
+        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-[#dbe2ec] bg-white p-6 shadow-sm">
           {error && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            <div className="rounded-lg bg-[#fdecef] p-3 text-sm text-[#b11226]">
               {error}
             </div>
           )}
@@ -78,7 +78,7 @@ export function CreateShopPage() {
             label="Nome da barbearia"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Ex: Barbearia do João"
+            helperText="Ex: Barbearia do João"
             required
           />
 
@@ -86,14 +86,14 @@ export function CreateShopPage() {
             label="Telefone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="(11) 99999-9999"
+            helperText="(11) 99999-9999"
           />
 
           <Input
             label="Endereço"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            placeholder="Rua, número, bairro"
+            helperText="Rua, número, bairro"
           />
 
           <Button type="submit" loading={loading} className="w-full">
@@ -104,3 +104,4 @@ export function CreateShopPage() {
     </div>
   )
 }
+

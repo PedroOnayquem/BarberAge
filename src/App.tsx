@@ -19,8 +19,8 @@ import type { ReactNode } from 'react'
 
 function LoadingScreen() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-      <div className="h-10 w-10 animate-spin rounded-full border-4 border-amber-500 border-t-transparent" />
+    <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)]">
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
     </div>
   )
 }

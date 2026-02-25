@@ -1,11 +1,43 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type InputHTMLAttributes } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { User, CheckCircle } from 'lucide-react'
+import { User, CheckCircle, ArrowLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
 import { translateError } from '../../lib/errorMessages'
+
+interface PremiumInputProps extends InputHTMLAttributes<HTMLInputElement> {
+  label: string
+}
+
+function PremiumInput({ label, value, onChange, type = 'text', ...props }: PremiumInputProps) {
+  const [focused, setFocused] = useState(false)
+  const hasValue = typeof value === 'string' && value.length > 0
+  const floating = focused || hasValue
+
+  return (
+    <div className="relative pt-6">
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder=" "
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className="w-full border-0 border-b border-[#dbe2ec] bg-transparent pb-2.5 text-base text-[#0a1f44] outline-none transition-colors duration-300 focus:border-[#1e3a8a]"
+        {...props}
+      />
+      <label
+        className={`pointer-events-none absolute left-0 transition-all duration-200 ${
+          floating
+            ? 'top-0 text-[11px] font-medium uppercase tracking-[0.14em] text-[#b11226]'
+            : 'top-6 text-sm text-[#6b7a95]'
+        }`}
+      >
+        {label}
+      </label>
+    </div>
+  )
+}
 
 export function RegisterClientPage() {
   const { refreshUserData } = useAuth()
@@ -18,7 +50,13 @@ export function RegisterClientPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [visible, setVisible] = useState(false)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setVisible(true))
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -35,13 +73,12 @@ export function RegisterClientPage() {
     }
 
     if (!shopSlug.trim()) {
-      setError('Informe o código da barbearia')
+      setError('Informe o codigo da barbearia')
       return
     }
 
     setLoading(true)
 
-    // 1. Find the shop by slug
     const { data: shop, error: shopError } = await supabase
       .from('shops')
       .select('id, name')
@@ -49,24 +86,21 @@ export function RegisterClientPage() {
       .single()
 
     if (shopError || !shop) {
-      setError('Barbearia não encontrada. Verifique o código informado.')
+      setError('Barbearia nao encontrada. Verifique o codigo informado.')
       setLoading(false)
       return
     }
 
-    // 2. Sign up the user
     const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
 
     if (authError) {
       if (authError.status === 429) {
-        // Rate limited — try login (user may already exist)
         const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password })
         if (loginError) {
           setError(translateError(authError.message))
           setLoading(false)
           return
         }
-        // User exists, continue with linking
         await linkClientToShop(loginData.user!.id, shop.id, name, phone, email)
         return
       }
@@ -82,7 +116,6 @@ export function RegisterClientPage() {
       return
     }
 
-    // Try to sign in (auto-confirm trigger should have confirmed)
     if (!authData.session) {
       const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
       if (loginError) {
@@ -96,7 +129,6 @@ export function RegisterClientPage() {
   }
 
   async function linkClientToShop(_userId: string, shopId: string, clientName: string, clientPhone: string, clientEmail: string) {
-    // Use RPC to atomically create client + link (bypasses RLS issues)
     const { error: rpcError } = await supabase.rpc('register_client', {
       p_shop_id: shopId,
       p_name: clientName,
@@ -114,79 +146,106 @@ export function RegisterClientPage() {
     navigate('/cliente', { replace: true })
   }
 
-  if (step === 'success') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
-        <div className="w-full max-w-sm">
-          <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-              <CheckCircle className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Verifique seu email</h2>
-            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-              Enviamos um link de confirmação para <strong className="text-zinc-700 dark:text-zinc-200">{email}</strong>.
-              Clique no link para ativar sua conta.
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f5f3ee] px-6 py-10">
+      <main
+        className={`relative z-10 w-full max-w-[580px] rounded-2xl border border-[#dbe2ec] bg-white px-7 py-10 shadow-[0_12px_30px_rgba(10,31,68,0.08)] transition-all duration-700 sm:px-10 ${
+          visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+        }`}
+      >
+        <div className="mb-12 text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#dbe2ec] bg-[#e9eef8] text-[#0a1f44]">
+            {step === 'success' ? <CheckCircle size={30} /> : <User size={30} />}
+          </div>
+          <h1 className="text-[26px] font-semibold uppercase tracking-[0.34em] text-[#0a1f44] sm:text-[30px]">BARBERAGE</h1>
+          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[#6b7a95]">
+            {step === 'success' ? 'Verifique seu email' : 'Cadastro Cliente'}
+          </p>
+        </div>
+
+        {step === 'success' ? (
+          <section className="space-y-6 text-center">
+            <p className="text-sm text-[#425a7f]">
+              Enviamos um link de confirmação para <strong className="text-[#0a1f44]">{email}</strong>. Clique no link para ativar sua conta.
             </p>
             <Link
               to="/login"
-              className="mt-6 inline-block text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-500"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6b7a95] transition-colors hover:text-[#0a1f44]"
             >
+              <ArrowLeft size={14} />
               Voltar para o login
             </Link>
-          </div>
-        </div>
-      </div>
-    )
-  }
+          </section>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && <div className="rounded-lg border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-sm text-[#b91c1c]">{error}</div>}
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-900/30">
-            <User className="h-8 w-8 text-emerald-600 dark:text-emerald-500" />
-          </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Cadastro de Cliente</h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Crie sua conta para agendar serviços</p>
-        </div>
+            <PremiumInput
+              label="Codigo da barbearia"
+              value={shopSlug}
+              onChange={(e) => setShopSlug(e.target.value)}
+              required
+            />
+            <p className="-mt-3 text-xs text-[#6b7a95]">Peca o codigo ao seu barbeiro</p>
 
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
-          {error && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
-              {error}
-            </div>
-          )}
+            <PremiumInput
+              label="Seu nome"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
 
-          <Input
-            label="Código da barbearia"
-            value={shopSlug}
-            onChange={(e) => setShopSlug(e.target.value)}
-            placeholder="ex: barbearia-do-joao-abc123"
-            required
-          />
-          <p className="-mt-2 text-xs text-zinc-400 dark:text-zinc-500">
-            Peça o código ao seu barbeiro
-          </p>
+            <PremiumInput
+              label="Telefone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
 
-          <Input label="Seu nome" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome completo" required />
-          <Input label="Telefone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999" />
-          <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" required />
-          <Input label="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
-          <Input label="Confirmar senha" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" required />
+            <PremiumInput
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
 
-          <Button type="submit" loading={loading} className="w-full">
-            Cadastrar
-          </Button>
+            <PremiumInput
+              label="Senha"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
 
-          <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-            Já tem conta?{' '}
-            <Link to="/login" className="font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-500">
-              Entrar
-            </Link>
-          </p>
-        </form>
-      </div>
+            <PremiumInput
+              label="Confirmar senha"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative mt-2 w-full overflow-hidden rounded-xl bg-[#b11226] px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-white transition-all duration-300 hover:bg-[#8f0e1f] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.38),transparent)] transition-transform duration-700 group-hover:translate-x-full" />
+              <span className="relative">{loading ? 'Cadastrando...' : 'Cadastrar'}</span>
+            </button>
+
+            <p className="text-center text-xs text-[#6b7a95]">
+              Ja tem conta?{' '}
+              <Link to="/login" className="font-semibold uppercase tracking-[0.08em] text-[#1e3a8a] hover:text-[#0a1f44]">
+                Entrar
+              </Link>
+            </p>
+          </form>
+        )}
+      </main>
     </div>
   )
 }
-

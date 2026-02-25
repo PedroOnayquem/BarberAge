@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -6,10 +7,335 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 
+:root {
+  --color-bg: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-surface-muted: #f1f4f8;
+  --color-text: #0a1f44;
+  --color-text-muted: #6b7a95;
+  --color-border: #dbe2ec;
+  --color-border-strong: #cfd8e6;
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-accent-soft: #dbeafe;
+  --color-primary: #b11226;
+  --color-primary-hover: #8f0e1f;
+  --color-primary-soft: #fdecef;
+  --color-input-bg: #f5f7fa;
+  --color-sidebar-bg: #0a1f44;
+  --color-sidebar-border: #193667;
+  --color-sidebar-text: #ffffff;
+  --shadow-card: 0 10px 30px rgba(10, 31, 68, 0.08);
+}
+
+.dark {
+  --color-bg: #0f172a;
+  --color-bg-elevated: #111827;
+  --color-surface-muted: #1f2937;
+  --color-text: #f8fafc;
+  --color-text-muted: #94a3b8;
+  --color-border: #1e293b;
+  --color-border-strong: #334155;
+  --color-accent: #3b82f6;
+  --color-accent-hover: #2563eb;
+  --color-accent-soft: rgba(59, 130, 246, 0.18);
+  --color-primary: #ef4444;
+  --color-primary-hover: #dc2626;
+  --color-primary-soft: rgba(239, 68, 68, 0.16);
+  --color-input-bg: #111827;
+  --color-sidebar-bg: #0b1220;
+  --color-sidebar-border: #1e293b;
+  --color-sidebar-text: #f8fafc;
+  --shadow-card: 0 12px 28px rgba(2, 6, 23, 0.5);
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
+  background: var(--color-bg);
+  color: var(--color-text);
   @apply antialiased;
+}
+
+.app-shell {
+  background-color: var(--color-bg);
+  background-image: none;
+}
+
+.auth-premium-bg {
+  background-color: #0d0d0f;
+  background-image:
+    linear-gradient(165deg, rgba(10, 31, 68, 0.44) 0%, rgba(10, 31, 68, 0.16) 38%, rgba(13, 13, 15, 0.96) 72%),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02));
+}
+
+.app-shell main h1,
+.app-shell main h2 {
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  font-weight: 700;
+}
+
+.app-shell main h1 {
+  font-weight: 800;
+}
+
+.barber-pole-line {
+  height: 5px;
+  width: 100%;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(177, 18, 38, 0.82) 0,
+    rgba(177, 18, 38, 0.82) 10px,
+    rgba(255, 255, 255, 0.9) 10px,
+    rgba(255, 255, 255, 0.9) 20px,
+    rgba(10, 31, 68, 0.82) 20px,
+    rgba(10, 31, 68, 0.82) 30px
+  );
+  background-size: 42px 42px;
+  opacity: 0.7;
+  animation: barber-pole-shift 20s linear infinite;
+}
+
+@keyframes barber-pole-shift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 42px 0;
+  }
+}
+
+.native-upload-trigger {
+  display: inline-flex;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.native-upload-trigger:hover {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border-strong);
+}
+
+.native-range {
+  width: 100%;
+  accent-color: var(--color-primary);
+}
+
+.native-check {
+  height: 1rem;
+  width: 1rem;
+  border-radius: 0.375rem;
+  accent-color: var(--color-primary);
+}
+
+.barber-datepicker {
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-card);
+  padding: 1rem;
+}
+
+.barber-datepicker-header {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.barber-datepicker-title {
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  text-transform: capitalize;
+}
+
+.barber-datepicker-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  width: 2rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  background: var(--color-bg-elevated);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.barber-datepicker-nav:hover {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border-strong);
+}
+
+.barber-datepicker-nav:focus-visible,
+.barber-datepicker-day:focus-visible,
+.floating-native-control:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.barber-datepicker-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin-bottom: 0.35rem;
+}
+
+.barber-datepicker-weekday {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  opacity: 0.85;
+}
+
+.barber-datepicker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.barber-datepicker-day {
+  height: 2.35rem;
+  width: 2.35rem;
+  margin: 0 auto;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.barber-datepicker-day:hover:not(:disabled):not(.is-selected) {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+}
+
+.barber-datepicker-day.is-selected {
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.barber-datepicker-day.is-today:not(.is-selected) {
+  border-color: var(--color-accent);
+}
+
+.barber-datepicker-day.is-outside {
+  color: var(--color-text-muted);
+  opacity: 0.45;
+}
+
+.barber-datepicker-day:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.floating-native-control {
+  padding-right: 2.5rem !important;
+}
+
+.floating-native-icon {
+  position: absolute;
+  right: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.barber-datepicker-popover {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  width: min(100%, 320px);
+}
+
+.barber-timepicker-popover {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  width: min(100%, 360px);
+}
+
+.barber-timepicker {
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-card);
+  padding: 1rem;
+}
+
+.barber-timepicker-title {
+  margin-bottom: 0.75rem;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.barber-timepicker-grid {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 0.125rem;
+}
+
+.barber-timepicker-slot {
+  min-height: 2.25rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.barber-timepicker-slot:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-muted);
+}
+
+.barber-timepicker-slot.is-selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.barber-timepicker-slot:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.outlined-field-label {
+  background: var(--color-input-bg);
+}
+
+.outlined-field:focus-within .outlined-field-label {
+  color: var(--color-accent);
 }

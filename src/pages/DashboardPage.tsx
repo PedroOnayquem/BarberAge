@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns'
+import { getSignedAvatarUrl, SHOP_AVATARS_BUCKET } from '../lib/avatarStorage'
 
 interface Stats {
   todayAppointments: number
@@ -43,10 +44,23 @@ export function DashboardPage() {
   })
   const [recentAppointments, setRecentAppointments] = useState<RecentAppointment[]>([])
   const [loading, setLoading] = useState(true)
+  const [shopAvatar, setShopAvatar] = useState<string | null>(null)
 
   useEffect(() => {
     if (currentShop) loadDashboard()
   }, [currentShop])
+
+  useEffect(() => {
+    let mounted = true
+    async function loadAvatar() {
+      const signed = await getSignedAvatarUrl(SHOP_AVATARS_BUCKET, currentShop?.avatar_url)
+      if (mounted) setShopAvatar(signed)
+    }
+    loadAvatar()
+    return () => {
+      mounted = false
+    }
+  }, [currentShop?.avatar_url])
 
   async function loadDashboard() {
     if (!currentShop) return
@@ -118,27 +132,40 @@ export function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
       </div>
     )
   }
 
   const statCards = [
-    { label: 'Agendamentos hoje', value: stats.todayAppointments, icon: Calendar, color: 'text-amber-600 dark:text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-    { label: 'Agendamentos no mês', value: stats.monthAppointments, icon: TrendingUp, color: 'text-blue-600 dark:text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-    { label: 'Clientes cadastrados', value: stats.totalClients, icon: Users, color: 'text-emerald-600 dark:text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-    { label: 'Serviços ativos', value: stats.activeServices, icon: Scissors, color: 'text-purple-600 dark:text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20' },
-    { label: 'Profissionais ativos', value: stats.activeProfessionals, icon: Clock, color: 'text-cyan-600 dark:text-cyan-500', bg: 'bg-cyan-50 dark:bg-cyan-900/20' },
-    { label: 'Pendentes', value: stats.pendingAppointments, icon: AlertCircle, color: 'text-orange-600 dark:text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20' },
+    { label: 'Agendamentos hoje', value: stats.todayAppointments, icon: Calendar, color: 'text-[var(--color-primary)]', bg: 'bg-[var(--color-primary-soft)]' },
+    { label: 'Agendamentos no mês', value: stats.monthAppointments, icon: TrendingUp, color: 'text-[var(--color-text)]', bg: 'bg-[var(--color-surface-muted)]' },
+    { label: 'Clientes cadastrados', value: stats.totalClients, icon: Users, color: 'text-[var(--color-text)]', bg: 'bg-[var(--color-surface-muted)]' },
+    { label: 'Serviços ativos', value: stats.activeServices, icon: Scissors, color: 'text-[var(--color-primary)]', bg: 'bg-[var(--color-primary-soft)]' },
+    { label: 'Profissionais ativos', value: stats.activeProfessionals, icon: Clock, color: 'text-[var(--color-text)]', bg: 'bg-[var(--color-surface-muted)]' },
+    { label: 'Pendentes', value: stats.pendingAppointments, icon: AlertCircle, color: 'text-[var(--color-primary)]', bg: 'bg-[var(--color-primary-soft)]' },
   ]
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Dashboard</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <h1 className="text-2xl font-bold text-[var(--color-text)]">Dashboard</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
           Visão geral da sua barbearia
         </p>
+        <div className="mt-4 flex items-center gap-3">
+          {shopAvatar ? (
+            <img src={shopAvatar} alt="Logo da barbearia" className="h-14 w-14 rounded-xl object-cover" />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[var(--color-surface-muted)] text-lg font-bold text-[var(--color-text)]">
+              {(currentShop?.name || 'B').charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text)]">{currentShop?.name}</p>
+            <p className="text-xs text-[var(--color-text-muted)]">{currentShop?.slug}</p>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -149,8 +176,8 @@ export function DashboardPage() {
                 <stat.icon className={`h-6 w-6 ${stat.color}`} />
               </div>
               <div>
-                <p className="text-2xl font-bold text-zinc-900 dark:text-white">{stat.value}</p>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">{stat.label}</p>
+                <p className="text-2xl font-bold text-[var(--color-text)]">{stat.value}</p>
+                <p className="text-sm text-[var(--color-text-muted)]">{stat.label}</p>
               </div>
             </div>
           </Card>
@@ -158,28 +185,28 @@ export function DashboardPage() {
       </div>
 
       <Card>
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
           Agenda de hoje
         </h2>
         {recentAppointments.length === 0 ? (
-          <p className="py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
+          <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
             Nenhum agendamento para hoje
           </p>
         ) : (
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-700">
+          <div className="divide-y divide-[var(--color-border)]">
             {recentAppointments.map((apt) => {
               const s = statusMap[apt.status] || statusMap.pending
               return (
                 <div key={apt.id} className="flex items-center justify-between py-3">
                   <div className="flex items-center gap-3">
-                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    <div className="text-sm font-medium text-[var(--color-text)]">
                       {format(new Date(apt.start_at), 'HH:mm')}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      <p className="text-sm font-medium text-[var(--color-text)]">
                         {apt.clients?.name || 'Cliente'}
                       </p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      <p className="text-xs text-[var(--color-text-muted)]">
                         com {apt.professionals?.name || 'Profissional'}
                       </p>
                     </div>
@@ -194,3 +221,4 @@ export function DashboardPage() {
     </div>
   )
 }
+
