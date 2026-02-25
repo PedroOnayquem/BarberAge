@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CalendarCheck, Clock, XCircle, Upload, Image as ImageIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -45,6 +46,7 @@ const statusVariants: Record<string, 'default' | 'warning' | 'success' | 'danger
 }
 
 export function ClientAppointmentsPage() {
+  const navigate = useNavigate()
   const { clientUser, clientShop, clientProfile, refreshUserData, user } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,7 +60,12 @@ export function ClientAppointmentsPage() {
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null)
 
   useEffect(() => {
-    if (clientUser && clientShop) loadAppointments()
+    if (clientUser && clientShop) {
+      loadAppointments()
+      return
+    }
+    setLoading(false)
+    setAppointments([])
   }, [clientUser, clientShop])
 
   useEffect(() => {
@@ -164,16 +171,32 @@ export function ClientAppointmentsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#b11226] border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
       </div>
+    )
+  }
+
+  if (!clientUser || !clientShop) {
+    return (
+      <Card>
+        <div className="space-y-2 py-4 text-center">
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">Nenhum agendamento ainda</h2>
+          <p className="text-sm text-[var(--color-text-muted)]">
+            Explore barbearias e faça seu primeiro agendamento.
+          </p>
+          <Button onClick={() => navigate('/cliente/barbearias')}>
+            Explorar barbearias
+          </Button>
+        </div>
+      </Card>
     )
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#0a1f44]">Meus Agendamentos</h1>
-        <p className="mt-1 text-sm text-[#6b7a95]">
+        <h1 className="text-2xl font-bold text-[var(--color-text)]">Meus Agendamentos</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
           Acompanhe seus agendamentos
         </p>
       </div>
@@ -183,13 +206,13 @@ export function ClientAppointmentsPage() {
           {avatarPreview ? (
             <img src={avatarPreview} alt="Foto de perfil" className="h-16 w-16 rounded-xl object-cover" />
           ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-[#f1f4f8] text-[#6b7a95]">
+            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-[var(--color-surface-muted)] text-[var(--color-text-muted)]">
               <ImageIcon size={22} />
             </div>
           )}
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-[#0a1f44]">Foto de perfil</p>
-            <p className="text-xs text-[#6b7a95]">JPG, PNG, WEBP ou GIF. Máximo 2MB.</p>
+            <p className="text-sm font-semibold text-[var(--color-text)]">Foto de perfil</p>
+            <p className="text-xs text-[var(--color-text-muted)]">JPG, PNG, WEBP ou GIF. Máximo 2MB.</p>
             <label className="native-upload-trigger">
               <Upload size={16} />
               {avatarLoading ? 'Enviando...' : 'Alterar foto'}
@@ -201,7 +224,7 @@ export function ClientAppointmentsPage() {
                 onChange={(e) => handleAvatarPick(e.target.files?.[0] || null)}
               />
             </label>
-            {avatarError && <p className="text-xs text-[#b11226]">{avatarError}</p>}
+            {avatarError && <p className="text-xs text-[var(--color-primary)]">{avatarError}</p>}
           </div>
         </div>
       </Card>
@@ -222,14 +245,13 @@ export function ClientAppointmentsPage() {
         onConfirm={handleAvatarCropped}
       />
 
-      {/* Upcoming */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase text-[#8b9bb8]">Próximos</h2>
+        <h2 className="mb-3 text-sm font-semibold uppercase text-[var(--color-text-muted)]">Próximos</h2>
         {upcoming.length === 0 ? (
           <Card>
             <div className="flex flex-col items-center py-8">
-              <CalendarCheck className="mb-2 h-10 w-10 text-[#a5b2ca]" />
-              <p className="text-sm text-[#8b9bb8]">Nenhum agendamento futuro</p>
+              <CalendarCheck className="mb-2 h-10 w-10 text-[var(--color-text-muted)]" />
+              <p className="text-sm text-[var(--color-text-muted)]">Nenhum agendamento futuro</p>
             </div>
           </Card>
         ) : (
@@ -241,10 +263,9 @@ export function ClientAppointmentsPage() {
         )}
       </div>
 
-      {/* Past */}
       {past.length > 0 && (
         <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase text-[#8b9bb8]">Histórico</h2>
+          <h2 className="mb-3 text-sm font-semibold uppercase text-[var(--color-text-muted)]">Histórico</h2>
           <div className="space-y-3">
             {past.map((apt) => (
               <AppointmentCard key={apt.id} apt={apt} />
@@ -253,23 +274,22 @@ export function ClientAppointmentsPage() {
         </div>
       )}
 
-      {/* Cancel modal */}
       <Modal open={cancelModalOpen} onClose={() => setCancelModalOpen(false)} title="Cancelar agendamento" size="sm">
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#fdecef]">
-              <XCircle className="h-5 w-5 text-[#b11226]" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-primary-soft)]">
+              <XCircle className="h-5 w-5 text-[var(--color-primary)]" />
             </div>
-            <p className="text-sm text-[#425a7f]">
+            <p className="text-sm text-[var(--color-text-muted)]">
               Tem certeza que deseja cancelar este agendamento?
             </p>
           </div>
           {selectedApt && (
-            <div className="rounded-lg bg-white p-3 text-sm">
-              <p className="font-medium text-[#0a1f44]">
+            <div className="rounded-lg bg-[var(--color-bg-elevated)] p-3 text-sm">
+              <p className="font-medium text-[var(--color-text)]">
                 {format(parseISO(selectedApt.start_at), "dd/MM/yyyy 'às' HH:mm")}
               </p>
-              <p className="text-[#6b7a95]">
+              <p className="text-[var(--color-text-muted)]">
                 {selectedApt.professionals?.name}
               </p>
             </div>
@@ -300,16 +320,16 @@ function AppointmentCard({
       <div className="flex items-start justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-[#8b9bb8]" />
-            <p className="text-sm font-semibold text-[#0a1f44]">
+            <Clock className="h-4 w-4 text-[var(--color-text-muted)]" />
+            <p className="text-sm font-semibold text-[var(--color-text)]">
               {format(parseISO(apt.start_at), "EEE, dd/MM 'às' HH:mm", { locale: ptBR })}
             </p>
           </div>
-          <p className="text-sm text-[#6b7a95]">
+          <p className="text-sm text-[var(--color-text-muted)]">
             {apt.professionals?.name}
           </p>
           {apt.appointment_services.length > 0 && (
-            <p className="text-xs text-[#8b9bb8]">
+            <p className="text-xs text-[var(--color-text-muted)]">
               {apt.appointment_services.map((s) => s.services?.name).filter(Boolean).join(', ')}
             </p>
           )}
@@ -319,17 +339,17 @@ function AppointmentCard({
             {statusLabels[apt.status] || apt.status}
           </Badge>
           {totalPrice > 0 && (
-            <span className="text-sm font-semibold text-[#0a1f44]">
+            <span className="text-sm font-semibold text-[var(--color-text)]">
               R$ {totalPrice.toFixed(2)}
             </span>
           )}
         </div>
       </div>
       {showCancel && onCancel && (apt.status === 'pending' || apt.status === 'confirmed') && (
-        <div className="mt-3 border-t border-[#e8edf5] pt-3">
+        <div className="mt-3 border-t border-[var(--color-border)] pt-3">
           <button
             onClick={onCancel}
-            className="text-sm text-[#b11226] hover:text-[#b11226]"
+            className="text-sm text-[var(--color-primary)] hover:text-[var(--color-primary-hover)]"
           >
             Cancelar agendamento
           </button>
@@ -338,5 +358,3 @@ function AppointmentCard({
     </Card>
   )
 }
-
-

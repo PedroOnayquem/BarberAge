@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Save, Plus, Trash2, Clock, CalendarOff, Copy, Check, Upload, Image as ImageIcon } from 'lucide-react'
+import { Save, Plus, Trash2, Clock, CalendarOff, Copy, Check, Upload, Image as ImageIcon, ExternalLink } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/ui/Button'
@@ -30,6 +30,12 @@ const WEEKDAYS = [
   { value: 5, label: 'Sexta-feira' },
   { value: 6, label: 'Sábado' },
   { value: 0, label: 'Domingo' },
+]
+
+const BRAZIL_STATES = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS',
+  'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC',
+  'SP', 'SE', 'TO',
 ]
 
 export function SettingsPage() {
@@ -97,21 +103,39 @@ function ShopSettings({
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
+  const [neighborhood, setNeighborhood] = useState('')
+  const [city, setCity] = useState('')
+  const [stateCode, setStateCode] = useState('')
   const [timezone, setTimezone] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [copiedPublicLink, setCopiedPublicLink] = useState(false)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [avatarError, setAvatarError] = useState('')
   const [avatarLoading, setAvatarLoading] = useState(false)
   const [cropModalOpen, setCropModalOpen] = useState(false)
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null)
 
+  function getPublicBaseUrl() {
+    const configured = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim()
+    if (configured) return configured.replace(/\/+$/, '')
+    if (typeof window !== 'undefined') return window.location.origin
+    return ''
+  }
+
+  function buildPublicShopUrl(slug: string) {
+    return `${getPublicBaseUrl()}/barbearias/${slug}`
+  }
+
   useEffect(() => {
     if (shop) {
       setName(shop.name)
       setPhone(shop.phone || '')
       setAddress(shop.address || '')
+      setNeighborhood(shop.neighborhood || '')
+      setCity(shop.city || '')
+      setStateCode(shop.state || '')
       setTimezone(shop.timezone)
     }
   }, [shop])
@@ -133,13 +157,38 @@ function ShopSettings({
     if (!shop) return
     setLoading(true)
     setSuccess(false)
+    setSaveError('')
 
-    await supabase.from('shops').update({
+    const { error } = await supabase.from('barbershops').update({
       name,
       phone: phone || null,
       address: address || null,
+      neighborhood: neighborhood.trim() || null,
+      city: city.trim() || null,
+      state: stateCode.trim().toUpperCase() || null,
       timezone,
     }).eq('id', shop.id)
+
+    if (error) {
+      if (import.meta.env.DEV) {
+        console.error('[settings][shop-update] failed', {
+          shopId: shop.id,
+          payload: {
+            name,
+            phone: phone || null,
+            address: address || null,
+            neighborhood: neighborhood.trim() || null,
+            city: city.trim() || null,
+            state: stateCode.trim().toUpperCase() || null,
+            timezone,
+          },
+          error,
+        })
+      }
+      setSaveError(translateError(error.message))
+      setLoading(false)
+      return
+    }
 
     setLoading(false)
     setSuccess(true)
@@ -176,7 +225,7 @@ function ShopSettings({
       })
 
       const { error } = await supabase
-        .from('shops')
+        .from('barbershops')
         .update({ avatar_url: newPath })
         .eq('id', shop.id)
 
@@ -195,16 +244,19 @@ function ShopSettings({
     }
   }
 
-  function handleCopySlug() {
+  function handleCopyPublicLink() {
     if (!shop) return
-    navigator.clipboard.writeText(shop.slug)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    const publicUrl = buildPublicShopUrl(shop.slug)
+    navigator.clipboard.writeText(publicUrl)
+    setCopiedPublicLink(true)
+    setTimeout(() => setCopiedPublicLink(false), 2000)
   }
+
+  const publicShopUrl = shop ? buildPublicShopUrl(shop.slug) : ''
 
   return (
     <div className="space-y-4">
-      {/* Client code card */}
+      {/* Shop media + public URL card */}
       {shop && (
         <Card>
           <div className="space-y-4">
@@ -235,21 +287,35 @@ function ShopSettings({
             {avatarError && (
               <div className="rounded-lg bg-[var(--color-primary-soft)] p-2 text-xs text-[var(--color-primary)]">{avatarError}</div>
             )}
-            <p className="text-sm font-semibold text-[var(--color-text)]">Código para clientes</p>
+            <p className="text-sm font-semibold text-[var(--color-text)]">Link público da barbearia</p>
             <p className="text-xs text-[var(--color-text-muted)]">
-              Compartilhe este código com seus clientes para que eles possam se cadastrar e agendar serviços na sua barbearia.
+              Compartilhe este link para que clientes visualizem sua página pública e façam agendamentos.
             </p>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 font-mono text-sm text-[var(--color-text)]">
-                {shop.slug}
-              </div>
-              <button
-                onClick={handleCopySlug}
-                className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
+            <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center">
+              <div
+                title={publicShopUrl}
+                className="min-w-0 w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-text)]"
               >
-                {copied ? <Check size={16} className="text-[var(--color-text)]" /> : <Copy size={16} />}
-                {copied ? 'Copiado!' : 'Copiar'}
-              </button>
+                {publicShopUrl}
+              </div>
+              <div className="grid w-full grid-cols-2 gap-2 md:w-auto md:grid-cols-none md:flex">
+                <button
+                  onClick={handleCopyPublicLink}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)] md:w-auto"
+                >
+                  {copiedPublicLink ? <Check size={16} className="text-[var(--color-text)]" /> : <Copy size={16} />}
+                  {copiedPublicLink ? 'Copiado!' : 'Copiar'}
+                </button>
+                <a
+                  href={publicShopUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)] md:w-auto"
+                >
+                  <ExternalLink size={16} />
+                  Abrir
+                </a>
+              </div>
             </div>
           </div>
         </Card>
@@ -258,9 +324,26 @@ function ShopSettings({
       {/* Shop info form */}
       <Card>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {saveError && (
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-primary)]">
+              {saveError}
+            </div>
+          )}
           <Input label="Nome da barbearia" value={name} onChange={(e) => setName(e.target.value)} disabled={!isAdmin} required />
           <Input label="Telefone" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={!isAdmin} />
           <Input label="Endereço" value={address} onChange={(e) => setAddress(e.target.value)} disabled={!isAdmin} />
+          <Input label="Bairro" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} disabled={!isAdmin} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Cidade" value={city} onChange={(e) => setCity(e.target.value)} disabled={!isAdmin} />
+            <Select label="UF" value={stateCode} onChange={(e) => setStateCode(e.target.value)} disabled={!isAdmin}>
+              <option value="">Não informado</option>
+              {BRAZIL_STATES.map((uf) => (
+                <option key={uf} value={uf}>
+                  {uf}
+                </option>
+              ))}
+            </Select>
+          </div>
           <Select label="Timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} disabled={!isAdmin}>
             <option value="America/Sao_Paulo">São Paulo (GMT-3)</option>
             <option value="America/Fortaleza">Fortaleza (GMT-3)</option>

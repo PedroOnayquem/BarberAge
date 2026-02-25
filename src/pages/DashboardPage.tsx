@@ -169,8 +169,8 @@ export function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {statCards.map((stat) => (
-          <Card key={stat.label}>
+        {statCards.map((stat, index) => (
+          <Card key={`dashboard-stat-${index}`}>
             <div className="flex items-center gap-4">
               <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${stat.bg}`}>
                 <stat.icon className={`h-6 w-6 ${stat.color}`} />

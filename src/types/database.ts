@@ -182,6 +182,36 @@ export type Database = {
           },
         ]
       }
+      client_profiles: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          phone: string | null
+          email: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          phone?: string | null
+          email?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          phone?: string | null
+          email?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       professionals: {
         Row: {
           active: boolean
@@ -294,31 +324,82 @@ export type Database = {
         Row: {
           address: string | null
           avatar_url: string | null
+          city: string | null
           created_at: string
           id: string
           name: string
+          neighborhood: string | null
           phone: string | null
           slug: string
+          state: string | null
           timezone: string
         }
         Insert: {
           address?: string | null
           avatar_url?: string | null
+          city?: string | null
           created_at?: string
           id?: string
           name: string
+          neighborhood?: string | null
           phone?: string | null
           slug: string
+          state?: string | null
           timezone?: string
         }
         Update: {
           address?: string | null
           avatar_url?: string | null
+          city?: string | null
           created_at?: string
           id?: string
           name?: string
+          neighborhood?: string | null
           phone?: string | null
           slug?: string
+          state?: string | null
+          timezone?: string
+        }
+        Relationships: []
+      }
+      barbershops: {
+        Row: {
+          address: string | null
+          avatar_url: string | null
+          city: string | null
+          created_at: string
+          id: string
+          name: string
+          neighborhood: string | null
+          phone: string | null
+          slug: string
+          state: string | null
+          timezone: string
+        }
+        Insert: {
+          address?: string | null
+          avatar_url?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          neighborhood?: string | null
+          phone?: string | null
+          slug: string
+          state?: string | null
+          timezone?: string
+        }
+        Update: {
+          address?: string | null
+          avatar_url?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          neighborhood?: string | null
+          phone?: string | null
+          slug?: string
+          state?: string | null
           timezone?: string
         }
         Relationships: []
@@ -425,6 +506,47 @@ export type Database = {
           p_duration_minutes: number
         }
         Returns: { slot_start: string; slot_end: string }[]
+      }
+      list_public_barbershops_with_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          name: string
+          slug: string
+          address: string | null
+          neighborhood: string | null
+          city: string | null
+          state: string | null
+          avatar_url: string | null
+          services_count: number
+          professionals_count: number
+          schedule_configured: boolean
+          catalog_active: boolean
+          can_book: boolean
+          missing_reasons: string[]
+        }[]
+      }
+      list_public_barbershops_with_status_filtered: {
+        Args: {
+          p_city?: string | null
+          p_state?: string | null
+        }
+        Returns: {
+          id: string
+          name: string
+          slug: string
+          address: string | null
+          neighborhood: string | null
+          city: string | null
+          state: string | null
+          avatar_url: string | null
+          services_count: number
+          professionals_count: number
+          schedule_configured: boolean
+          catalog_active: boolean
+          can_book: boolean
+          missing_reasons: string[]
+        }[]
       }
       register_client: {
         Args: {

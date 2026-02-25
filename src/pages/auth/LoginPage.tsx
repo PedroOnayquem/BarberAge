@@ -59,7 +59,8 @@ export function LoginPage() {
     setError('')
     setLoading(true)
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    const normalizedEmail = email.trim().toLowerCase()
+    const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
     if (error) {
       setError(translateError(error.message))
       setLoading(false)
@@ -86,18 +87,25 @@ export function LoginPage() {
         return
       }
     } else {
-      const { data: clientUsers } = await supabase
-        .from('client_users')
-        .select('id')
-        .eq('user_id', data.user.id)
-        .limit(1)
+      const userMeta = (data.user.user_metadata || {}) as Record<string, unknown>
+      const isClientByMetadata =
+        userMeta.role === 'client' || userMeta.account_type === 'client'
 
-      if (!clientUsers || clientUsers.length === 0) {
-        setError('Esta conta não está cadastrada como cliente. Cadastre-se primeiro.')
-        await supabase.auth.signOut()
-        setLoading(false)
-        return
+      if (!isClientByMetadata) {
+        const { data: clientUsers } = await supabase
+          .from('client_users')
+          .select('id')
+          .eq('user_id', data.user.id)
+          .limit(1)
+
+        if (!clientUsers || clientUsers.length === 0) {
+          setError('Esta conta não está cadastrada como cliente. Cadastre-se primeiro.')
+          await supabase.auth.signOut()
+          setLoading(false)
+          return
+        }
       }
+
       navigate('/cliente')
     }
 

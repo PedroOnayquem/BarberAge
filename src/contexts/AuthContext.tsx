@@ -8,6 +8,12 @@ type Shop = Tables<'shops'>
 type ClientUser = Tables<'client_users'>
 type Client = Tables<'clients'>
 
+interface ClientGlobalProfile {
+  name: string | null
+  phone: string | null
+  email: string | null
+}
+
 export type UserRole = 'admin' | 'professional' | 'reception' | 'client' | null
 
 interface AuthState {
@@ -22,6 +28,7 @@ interface AuthState {
   userRole: UserRole
   clientUser: ClientUser | null
   clientProfile: Client | null
+  clientGlobalProfile: ClientGlobalProfile | null
   clientShop: Shop | null
   refreshUserData: () => Promise<void>
 }
@@ -38,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<UserRole>(null)
   const [clientUser, setClientUser] = useState<ClientUser | null>(null)
   const [clientProfile, setClientProfile] = useState<Client | null>(null)
+  const [clientGlobalProfile, setClientGlobalProfile] = useState<ClientGlobalProfile | null>(null)
   const [clientShop, setClientShop] = useState<Shop | null>(null)
 
   useEffect(() => {
@@ -45,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadUserData(session.user.id)
+        loadUserData(session.user.id, session.user)
       } else {
         setLoading(false)
       }
@@ -55,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadUserData(session.user.id)
+        loadUserData(session.user.id, session.user)
       } else {
         resetState()
       }
@@ -71,20 +79,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserRole(null)
     setClientUser(null)
     setClientProfile(null)
+    setClientGlobalProfile(null)
     setClientShop(null)
     setLoading(false)
   }
 
-  async function loadUserData(userId: string) {
+  async function loadUserData(userId: string, authUser?: User) {
     // Clear stale role-linked data before reloading
     setShops([])
     setCurrentShopState(null)
     setMembership(null)
     setClientUser(null)
     setClientProfile(null)
+    setClientGlobalProfile(null)
     setClientShop(null)
 
-    // Load both shop memberships and client links in parallel
+    // Load memberships + client links in parallel
     const [membersRes, clientUsersRes] = await Promise.all([
       supabase.from('shop_members').select('*, shops(*)').eq('user_id', userId),
       supabase.from('client_users').select('*, shops(*), clients(*)').eq('user_id', userId),
@@ -92,6 +102,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const members = membersRes.data
     const clientUsers = clientUsersRes.data
+    const meta = (authUser?.user_metadata || {}) as Record<string, unknown>
+    const isClientFromMetadata =
+      meta.role === 'client' || meta.account_type === 'client'
+    const globalClientProfile: ClientGlobalProfile | null =
+      isClientFromMetadata || typeof meta.name === 'string' || typeof meta.phone === 'string'
+        ? {
+            name: typeof meta.name === 'string' ? meta.name : null,
+            phone: typeof meta.phone === 'string' ? meta.phone : null,
+            email: authUser?.email ?? null,
+          }
+        : null
 
     // Check if user is a shop member
     if (members && members.length > 0) {
@@ -119,14 +140,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setClientUser(clientUsers[0])
       setClientShop((clientUsers[0] as any).shops as Shop)
       setClientProfile((clientUsers[0] as any).clients as Client)
-      // If not a shop member, set role to client
-      if (!members || members.length === 0) {
-        setUserRole('client')
-      }
     }
 
-    // If neither, leave role as null (new user, needs to create shop or register as client)
-    if ((!members || members.length === 0) && (!clientUsers || clientUsers.length === 0)) {
+    if (globalClientProfile) {
+      setClientGlobalProfile(globalClientProfile)
+    }
+
+    // If not a shop member, client role is defined by metadata profile or old shop-linked client.
+    if ((!members || members.length === 0) && (globalClientProfile || (clientUsers && clientUsers.length > 0))) {
+      setUserRole('client')
+    }
+
+    // If neither, leave role as null (new user, needs onboarding)
+    if ((!members || members.length === 0) && !globalClientProfile && (!clientUsers || clientUsers.length === 0)) {
       setUserRole(null)
     }
 
@@ -137,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentUserId = user?.id ?? session?.user?.id
     if (!currentUserId) return
     setLoading(true)
-    await loadUserData(currentUserId)
+    await loadUserData(currentUserId, user ?? session?.user ?? undefined)
   }
 
   function setCurrentShop(shop: Shop, mem: ShopMember) {
@@ -151,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user, session, currentShop, membership, shops, loading, setCurrentShop,
-        userRole, clientUser, clientProfile, clientShop, refreshUserData,
+        userRole, clientUser, clientProfile, clientGlobalProfile, clientShop, refreshUserData,
       }}
     >
       {children}

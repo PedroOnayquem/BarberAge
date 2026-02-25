@@ -26,6 +26,8 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
+const client = createClient<Database>(supabaseUrl, supabaseAnonKey)
+
 if (import.meta.env.DEV) {
   const refFromUrl = extractProjectRefFromUrl(supabaseUrl)
   const payload = decodeJwtPayload(supabaseAnonKey)
@@ -41,6 +43,18 @@ if (import.meta.env.DEV) {
   } else {
     console.info(`[supabase][dev-check] URL e ANON key apontam para o mesmo projeto: '${refFromUrl}'.`)
   }
+
+  const originalFrom = client.from.bind(client)
+  client.from = ((relation: any) => {
+    if (relation === 'client_profiles') {
+      console.warn(
+        "[supabase][dev-check] Query legada para 'client_profiles' detectada. " +
+        "Atualize o fluxo para metadata/client_users."
+      )
+      console.trace('[supabase][dev-check] stack da query client_profiles')
+    }
+    return originalFrom(relation)
+  }) as typeof client.from
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
+export const supabase = client

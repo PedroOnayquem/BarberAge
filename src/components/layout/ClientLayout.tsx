@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { Calendar, CalendarCheck, LogOut, Sun, Moon } from 'lucide-react'
+import { Store, CalendarCheck, LogOut, Sun, Moon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -32,7 +32,7 @@ export function ClientLayout() {
   }
 
   const navItems = [
-    { to: '/cliente', icon: Calendar, label: 'Agendar', end: true },
+    { to: '/cliente/barbearias', icon: Store, label: 'Barbearias' },
     { to: '/cliente/agendamentos', icon: CalendarCheck, label: 'Meus Agendamentos' },
   ]
 
@@ -87,7 +87,6 @@ export function ClientLayout() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.end}
               className={({ isActive }) =>
                 `flex flex-1 flex-col items-center gap-1 py-3 text-xs font-semibold transition-colors ${
                   isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'

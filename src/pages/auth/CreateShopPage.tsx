@@ -32,7 +32,7 @@ export function CreateShopPage() {
     const slug = generateSlug(name) + '-' + Date.now().toString(36)
 
     const { data: shop, error: shopError } = await supabase
-      .from('shops')
+      .from('barbershops')
       .insert({ name, slug, phone: phone || null, address: address || null })
       .select()
       .single()

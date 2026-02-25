@@ -83,8 +83,8 @@ export function DatePickerCard({
       </div>
 
       <div className="barber-datepicker-weekdays" aria-hidden="true">
-        {weekLabels.map((label) => (
-          <span key={label} className="barber-datepicker-weekday">
+        {weekLabels.map((label, index) => (
+          <span key={`weekday-${weekStartsOn}-${index}`} className="barber-datepicker-weekday">
             {label}
           </span>
         ))}

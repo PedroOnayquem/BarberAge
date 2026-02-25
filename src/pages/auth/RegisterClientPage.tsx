@@ -39,10 +39,29 @@ function PremiumInput({ label, value, onChange, type = 'text', ...props }: Premi
   )
 }
 
+function isAlreadyRegisteredError(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return (
+    normalized.includes('already registered') ||
+    normalized.includes('already exists') ||
+    normalized.includes('já está cadastrado')
+  )
+}
+
+function shouldRetrySignUpWithoutMetadata(status?: number, message?: string): boolean {
+  if (status !== 422) return false
+  const normalized = (message || '').toLowerCase()
+  return (
+    normalized.includes('metadata') ||
+    normalized.includes('unprocessable') ||
+    normalized.includes('invalid request') ||
+    normalized.includes('payload')
+  )
+}
+
 export function RegisterClientPage() {
   const { refreshUserData } = useAuth()
   const [step, setStep] = useState<'form' | 'success'>('form')
-  const [shopSlug, setShopSlug] = useState('')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -62,6 +81,20 @@ export function RegisterClientPage() {
     e.preventDefault()
     setError('')
 
+    const normalizedName = name.trim()
+    const normalizedPhone = phone.trim()
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!normalizedName) {
+      setError('Informe seu nome')
+      return
+    }
+
+    if (!normalizedEmail) {
+      setError('Informe seu email')
+      return
+    }
+
     if (password !== confirmPassword) {
       setError('As senhas não coincidem')
       return
@@ -72,78 +105,89 @@ export function RegisterClientPage() {
       return
     }
 
-    if (!shopSlug.trim()) {
-      setError('Informe o codigo da barbearia')
-      return
+    const metadata: Record<string, string> = {
+      role: 'client',
+      account_type: 'client',
+      name: normalizedName,
+    }
+    if (normalizedPhone) {
+      metadata.phone = normalizedPhone
     }
 
     setLoading(true)
+    try {
+      let signUpResult = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          data: metadata,
+        },
+      })
 
-    const { data: shop, error: shopError } = await supabase
-      .from('shops')
-      .select('id, name')
-      .eq('slug', shopSlug.trim().toLowerCase())
-      .single()
+      if (signUpResult.error && shouldRetrySignUpWithoutMetadata(signUpResult.error.status, signUpResult.error.message)) {
+        signUpResult = await supabase.auth.signUp({
+          email: normalizedEmail,
+          password,
+        })
+      }
 
-    if (shopError || !shop) {
-      setError('Barbearia nao encontrada. Verifique o codigo informado.')
-      setLoading(false)
-      return
-    }
+      if (signUpResult.error) {
+        if (import.meta.env.DEV) {
+          console.error('[register-client] signUp failed', {
+            status: signUpResult.error.status,
+            code: signUpResult.error.code,
+            message: signUpResult.error.message,
+          })
+        }
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
+        const canLoginFallback =
+          signUpResult.error.status === 429 || isAlreadyRegisteredError(signUpResult.error.message)
 
-    if (authError) {
-      if (authError.status === 429) {
-        const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password })
-        if (loginError) {
-          setError(translateError(authError.message))
-          setLoading(false)
+        if (canLoginFallback) {
+          const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          })
+          if (!loginError && loginData.user) {
+            await supabase.auth.updateUser({ data: metadata })
+            await refreshUserData()
+            navigate('/cliente/barbearias', { replace: true })
+            return
+          }
+        }
+
+        setError(translateError(signUpResult.error.message))
+        return
+      }
+
+      const userId = signUpResult.data.user?.id
+      if (!userId) {
+        setError('Erro ao criar conta')
+        return
+      }
+
+      if (!signUpResult.data.session) {
+        const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        })
+        if (loginError || !loginData.user) {
+          setStep('success')
           return
         }
-        await linkClientToShop(loginData.user!.id, shop.id, name, phone, email)
+
+        await supabase.auth.updateUser({ data: metadata })
+        await refreshUserData()
+        navigate('/cliente/barbearias', { replace: true })
         return
       }
-      setError(translateError(authError.message))
+
+      await supabase.auth.updateUser({ data: metadata })
+      await refreshUserData()
+      navigate('/cliente/barbearias', { replace: true })
+    } finally {
       setLoading(false)
-      return
     }
-
-    const userId = authData.user?.id
-    if (!userId) {
-      setError('Erro ao criar conta')
-      setLoading(false)
-      return
-    }
-
-    if (!authData.session) {
-      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
-      if (loginError) {
-        setStep('success')
-        setLoading(false)
-        return
-      }
-    }
-
-    await linkClientToShop(userId, shop.id, name, phone, email)
-  }
-
-  async function linkClientToShop(_userId: string, shopId: string, clientName: string, clientPhone: string, clientEmail: string) {
-    const { error: rpcError } = await supabase.rpc('register_client', {
-      p_shop_id: shopId,
-      p_name: clientName,
-      p_phone: clientPhone || null,
-      p_email: clientEmail || null,
-    })
-
-    if (rpcError) {
-      setError(translateError(rpcError.message))
-      setLoading(false)
-      return
-    }
-
-    await refreshUserData()
-    navigate('/cliente', { replace: true })
   }
 
   return (
@@ -179,14 +223,6 @@ export function RegisterClientPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && <div className="rounded-lg border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-sm text-[#b91c1c]">{error}</div>}
-
-            <PremiumInput
-              label="Codigo da barbearia"
-              value={shopSlug}
-              onChange={(e) => setShopSlug(e.target.value)}
-              required
-            />
-            <p className="-mt-3 text-xs text-[#6b7a95]">Peca o codigo ao seu barbeiro</p>
 
             <PremiumInput
               label="Seu nome"
