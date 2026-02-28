@@ -13,7 +13,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 
 const navItems = [
-  { to: '/app', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/app/appointments', icon: Calendar, label: 'Agenda' },
   { to: '/app/clients', icon: Users, label: 'Clientes' },
   { to: '/app/services', icon: Scissors, label: 'Serviços' },
@@ -89,7 +89,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                     : 'text-white/76 hover:bg-white/8 hover:text-white'
                 }`
               }
-              end={item.to === '/app'}
+              end={item.to === '/app/dashboard'}
             >
               {({ isActive }) => (
                 <>

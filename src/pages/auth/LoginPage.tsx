@@ -50,6 +50,8 @@ export function LoginPage() {
         setLoading(false)
         return
       }
+
+      navigate('/app/dashboard')
     } else {
       const userMeta = (data.user.user_metadata || {}) as Record<string, unknown>
       const isClientByMetadata =

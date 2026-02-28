@@ -59,7 +59,8 @@ function PublicRoute({ children }: { children: ReactNode }) {
   // If logged in, redirect based on role
   if (user) {
     if (userRole === 'client') return <Navigate to="/cliente/barbearias" replace />
-    if (currentShop) return <Navigate to="/app" replace />
+    if (currentShop) return <Navigate to="/app/dashboard" replace />
+    return <Navigate to="/create-shop" replace />
   }
 
   return <>{children}</>
@@ -71,7 +72,7 @@ function CreateShopRoute({ children }: { children: ReactNode }) {
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace />
   if (userRole === 'client') return <Navigate to="/cliente/barbearias" replace />
-  if (currentShop) return <Navigate to="/app" replace />
+  if (currentShop) return <Navigate to="/app/dashboard" replace />
 
   return <>{children}</>
 }
@@ -79,6 +80,9 @@ function CreateShopRoute({ children }: { children: ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Root route */}
+      <Route path="/" element={<RootRedirect />} />
+
       {/* Public marketplace routes */}
       <Route path="/barbearias" element={<BarbershopsPage />} />
       <Route path="/barbearias/:slug" element={<BarbershopPublicPage />} />
@@ -91,7 +95,8 @@ function AppRoutes() {
 
       {/* Shop admin routes (/app/*) */}
       <Route path="/app" element={<ShopProtectedRoute><AppLayout /></ShopProtectedRoute>}>
-        <Route index element={<DashboardPage />} />
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardPage />} />
         <Route path="appointments" element={<AppointmentsPage />} />
         <Route path="clients" element={<ClientsPage />} />
         <Route path="services" element={<ServicesPage />} />
@@ -120,9 +125,9 @@ function RootRedirect() {
   const { user, loading, currentShop, userRole } = useAuth()
 
   if (loading) return <LoadingScreen />
-  if (!user) return <Navigate to="/barbearias" replace />
+  if (!user) return <Navigate to="/login" replace />
   if (userRole === 'client') return <Navigate to="/cliente/barbearias" replace />
-  if (currentShop) return <Navigate to="/app" replace />
+  if (currentShop) return <Navigate to="/app/dashboard" replace />
   return <Navigate to="/create-shop" replace />
 }
 

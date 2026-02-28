@@ -293,7 +293,7 @@ export function CreateShopPage() {
       }
     }
 
-    window.location.href = '/app'
+    window.location.href = '/app/dashboard'
   }
 
   return (
