@@ -8,6 +8,7 @@ interface GeocodePayload {
   neighborhood?: string | null
   address_street?: string | null
   address_number?: string | null
+  address?: string | null
   complement?: string | null
   persist?: boolean
 }
@@ -19,6 +20,7 @@ interface LocationFields {
   neighborhood: string
   address_street: string
   address_number: string
+  address: string
   complement: string
 }
 
@@ -71,13 +73,18 @@ function sanitize(value: string | null | undefined) {
 }
 
 function mergeFields(payload: GeocodePayload, source?: Partial<LocationFields> | null): LocationFields {
+  const normalizedStreet = sanitize(payload.address_street ?? source?.address_street ?? '')
+  const normalizedNumber = sanitize(payload.address_number ?? source?.address_number ?? '')
+  const normalizedAddress = sanitize(payload.address ?? source?.address ?? '')
+
   return {
     cep: normalizeCep(payload.cep ?? source?.cep ?? ''),
     city: sanitize(payload.city ?? source?.city ?? ''),
     state: sanitize(payload.state ?? source?.state ?? '').toUpperCase(),
     neighborhood: sanitize(payload.neighborhood ?? source?.neighborhood ?? ''),
-    address_street: sanitize(payload.address_street ?? source?.address_street ?? ''),
-    address_number: sanitize(payload.address_number ?? source?.address_number ?? ''),
+    address_street: normalizedStreet,
+    address_number: normalizedNumber,
+    address: normalizedAddress || buildQueryParts([normalizedStreet, normalizedNumber]),
     complement: sanitize(payload.complement ?? source?.complement ?? ''),
   }
 }
@@ -94,6 +101,7 @@ function buildQueryCandidates(fields: LocationFields): QueryCandidate[] {
   const seen = new Set<string>()
   const cep = formatCep(fields.cep)
   const streetWithNumber = buildQueryParts([fields.address_street, fields.address_number])
+  const freeAddress = sanitize(fields.address)
 
   function push(precision: QueryCandidate['precision'], parts: Array<string | null | undefined>) {
     const query = buildQueryParts([...parts, 'Brasil'])
@@ -103,10 +111,19 @@ function buildQueryCandidates(fields: LocationFields): QueryCandidate[] {
   }
 
   push('exact', [streetWithNumber, fields.neighborhood, fields.city, fields.state, cep])
+  if (freeAddress) {
+    push('exact', [freeAddress, fields.neighborhood, fields.city, fields.state, cep])
+  }
   push('street', [streetWithNumber, fields.city, fields.state, cep])
+  if (freeAddress) {
+    push('street', [freeAddress, fields.city, fields.state, cep])
+  }
   push('street', [fields.address_street, fields.city, fields.state, cep])
   push('neighborhood', [fields.neighborhood, fields.city, fields.state, cep])
   push('postcode', [cep, fields.city, fields.state])
+  if (freeAddress) {
+    push('city', [freeAddress, fields.city, fields.state])
+  }
   push('city', [fields.city, fields.state])
 
   return candidates
@@ -114,11 +131,9 @@ function buildQueryCandidates(fields: LocationFields): QueryCandidate[] {
 
 function hasMinimumAddress(fields: LocationFields) {
   return Boolean(
-    fields.cep &&
-    fields.address_street &&
-    fields.address_number &&
-    fields.city &&
-    fields.state
+    (fields.cep && fields.address_street && fields.address_number && fields.city && fields.state) ||
+    (fields.address && fields.city && fields.state) ||
+    (fields.address && fields.cep)
   )
 }
 
@@ -148,12 +163,10 @@ async function persistCoordinates(
   latitude: number,
   longitude: number
 ) {
-  const primary = await supabase
+  await supabase
     .from('shops')
     .update({ latitude, longitude })
     .eq('id', shopId)
-
-  if (!primary.error) return
 
   await supabase
     .from('barbershops')
@@ -233,7 +246,7 @@ Deno.serve(async (req) => {
     if (shopId) {
       const shopRes = await supabase
         .from('shops')
-        .select('cep, city, state, neighborhood, address_street, address_number, complement')
+        .select('cep, city, state, neighborhood, address_street, address_number, address, complement')
         .eq('id', shopId)
         .maybeSingle()
 
@@ -242,7 +255,7 @@ Deno.serve(async (req) => {
       } else {
         const compatibilityRes = await supabase
           .from('barbershops')
-          .select('cep, city, state, neighborhood, address_street, address_number, complement')
+          .select('cep, city, state, neighborhood, address_street, address_number, address, complement')
           .eq('id', shopId)
           .maybeSingle()
         sourceFields = compatibilityRes.data || null
