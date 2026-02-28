@@ -962,7 +962,7 @@ function ShopSettings({
           </div>
 
           {isAdmin && (
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex flex-col items-start gap-3 pt-2 sm:flex-row sm:items-center">
               <Button type="submit" loading={loading}>
               <Save size={16} /> Salvar
               </Button>
@@ -1266,7 +1266,7 @@ function TimeOffSettings({ shopId, isAdmin }: { shopId: string | undefined; isAd
         ) : (
           <div className="space-y-2">
             {timeOffs.map((to) => (
-              <div key={to.id} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] p-3">
+              <div key={to.id} className="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-[var(--color-text)]">
                     {to.professionals?.name || 'Toda a barbearia'}
@@ -1307,7 +1307,7 @@ function TimeOffSettings({ shopId, isAdmin }: { shopId: string | undefined; isAd
             ))}
           </Select>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <DatePickerField
               label="Data início"
               value={formStartDate}
@@ -1320,7 +1320,7 @@ function TimeOffSettings({ shopId, isAdmin }: { shopId: string | undefined; isAd
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <DatePickerField
               label="Data fim"
               value={formEndDate}
@@ -1340,7 +1340,7 @@ function TimeOffSettings({ shopId, isAdmin }: { shopId: string | undefined; isAd
             helperText="Ex: Férias, folga..."
           />
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button type="submit" loading={formLoading}>Criar bloqueio</Button>
           </div>
@@ -1401,7 +1401,7 @@ function MembersSettings({ shopId, isAdmin }: { shopId: string | undefined; isAd
 
       <div className="space-y-3">
         {members.map((member) => (
-          <div key={member.id} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] p-3">
+          <div key={member.id} className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] p-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-[var(--color-text)]">
                 {member.user_id.slice(0, 8)}...
@@ -1412,12 +1412,12 @@ function MembersSettings({ shopId, isAdmin }: { shopId: string | undefined; isAd
             </div>
 
             {isAdmin && (
-              <div className="flex items-center gap-2">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                 <Select
                   label="Função"
                   value={member.role}
                   onChange={(e) => handleRoleChange(member.id, e.target.value)}
-                  className="min-w-[170px]"
+                  className="w-full sm:min-w-[170px]"
                 >
                   <option value="admin">Admin</option>
                   <option value="professional">Profissional</option>

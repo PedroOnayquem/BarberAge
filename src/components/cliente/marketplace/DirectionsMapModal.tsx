@@ -691,30 +691,20 @@ export function DirectionsMapModal({
   const locationStatusMessage =
     permissionMessage || (!userCoords && loadingLocation ? 'Localizando...' : '')
   const showInAppWarning = !userCoords && isInAppBrowser
-  const debugInfo = useMemo(() => {
-    if (!import.meta.env.DEV) return ''
-    return [
-      `ua=${userAgent}`,
-      `inApp=${isInAppBrowser ? 'yes' : 'no'}${inAppDetection.source ? `(${inAppDetection.source})` : ''}`,
-      `permission=${permissionState}`,
-      `permissionsApi=${permissionApiState}`,
-      `secureContext=${window.isSecureContext ? 'yes' : 'no'}`,
-      `protocol=${window.location.protocol}`,
-      `origin=${window.location.origin}`,
-      `lastClick=${formatTimestamp(lastRequestAt)}`,
-      `errorCode=${locationError?.code ?? '-'}`,
-      `errorMessage=${locationError?.message || '-'}`,
-    ].join(' | ')
-  }, [
-    inAppDetection.source,
-    isInAppBrowser,
-    lastRequestAt,
-    locationError?.code,
-    locationError?.message,
-    permissionApiState,
-    permissionState,
-    userAgent,
-  ])
+  const debugInfo = import.meta.env.DEV
+    ? [
+        `ua=${userAgent}`,
+        `inApp=${isInAppBrowser ? 'yes' : 'no'}${inAppDetection.source ? `(${inAppDetection.source})` : ''}`,
+        `permission=${permissionState}`,
+        `permissionsApi=${permissionApiState}`,
+        `secureContext=${window.isSecureContext ? 'yes' : 'no'}`,
+        `protocol=${window.location.protocol}`,
+        `origin=${window.location.origin}`,
+        `lastClick=${formatTimestamp(lastRequestAt)}`,
+        `errorCode=${locationError?.code ?? '-'}`,
+        `errorMessage=${locationError?.message || '-'}`,
+      ].join(' | ')
+    : ''
 
   return createPortal(
     <div className="directions-map-modal fixed inset-0 z-[160]" style={modalStyle}>
@@ -728,7 +718,7 @@ export function DirectionsMapModal({
             <X size={18} />
           </button>
 
-          <div className="pointer-events-auto rounded-full border border-white/20 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold tracking-[0.08em] text-slate-100 backdrop-blur">
+          <div className="pointer-events-auto max-w-[60vw] truncate rounded-full border border-white/20 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold tracking-[0.08em] text-slate-100 backdrop-blur sm:max-w-xs">
             {shopName}
           </div>
 
@@ -806,7 +796,7 @@ export function DirectionsMapModal({
                 <button
                   onClick={handleRecenter}
                   className="absolute right-4 z-[6] inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-slate-900/82 text-slate-100 shadow-[0_8px_26px_rgba(2,6,23,0.4)] backdrop-blur transition-all hover:scale-[1.02] hover:bg-slate-800/90"
-                  style={{ bottom: 'calc(clamp(252px, 36dvh, 360px) + 16px)' }}
+                  style={{ bottom: 'calc(clamp(208px, 34dvh, 340px) + 12px)' }}
                   aria-label="Voltar para minha posicao"
                   title="Voltar para minha posicao"
                 >
@@ -822,7 +812,7 @@ export function DirectionsMapModal({
         </div>
 
         <div className="relative z-[6] px-3 pb-[max(0.7rem,env(safe-area-inset-bottom))]">
-          <div className="mx-auto h-[clamp(252px,36dvh,360px)] max-w-3xl rounded-t-3xl border border-b-0 border-white/15 bg-slate-950/84 px-4 pb-4 pt-3 shadow-[0_-16px_38px_rgba(2,6,23,0.55)] backdrop-blur-xl">
+          <div className="mx-auto h-[clamp(208px,34dvh,340px)] max-w-3xl overflow-y-auto rounded-t-3xl border border-b-0 border-white/15 bg-slate-950/84 px-4 pb-4 pt-3 shadow-[0_-16px_38px_rgba(2,6,23,0.55)] backdrop-blur-xl">
             <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-white/35" />
 
             {showPermissionChecking && (
@@ -844,7 +834,7 @@ export function DirectionsMapModal({
                     Navegador embutido detectado ({inAppDetection.source || 'in-app'}). Abra no Chrome/Safari para usar localizacao.
                   </div>
                 )}
-                {import.meta.env.DEV && !!debugInfo && <p className="text-[11px] text-slate-400">{debugInfo}</p>}
+                {import.meta.env.DEV && !!debugInfo && <p className="break-all text-[11px] text-slate-400">{debugInfo}</p>}
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
                     onClick={handleRequestLocation}
@@ -877,7 +867,7 @@ export function DirectionsMapModal({
                   No celular, a geolocalizacao precisa de HTTPS. Abra o app em uma URL segura para permitir rota em tempo real.
                 </p>
                 {permissionMessage && <p className="text-xs text-slate-300">{permissionMessage}</p>}
-                {import.meta.env.DEV && !!debugInfo && <p className="text-[11px] text-slate-400">{debugInfo}</p>}
+                {import.meta.env.DEV && !!debugInfo && <p className="break-all text-[11px] text-slate-400">{debugInfo}</p>}
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
                     onClick={() => openExternal(googleMapsUrl)}
@@ -916,7 +906,7 @@ export function DirectionsMapModal({
                     Navegador embutido detectado ({inAppDetection.source || 'in-app'}). Abra no Chrome/Safari para liberar localizacao.
                   </div>
                 )}
-                {import.meta.env.DEV && !!debugInfo && <p className="text-[11px] text-slate-400">{debugInfo}</p>}
+                {import.meta.env.DEV && !!debugInfo && <p className="break-all text-[11px] text-slate-400">{debugInfo}</p>}
                 {locationError && (
                   <p className="text-[11px] text-slate-400">
                     Erro {locationError.code ?? '-'}: {locationError.message || 'sem detalhe'}
@@ -996,7 +986,7 @@ export function DirectionsMapModal({
                     Erro geolocalizacao {locationError.code ?? '-'}: {locationError.message || 'sem detalhe'}
                   </p>
                 )}
-                {import.meta.env.DEV && !!debugInfo && <p className="mt-2 text-[11px] text-slate-400">{debugInfo}</p>}
+                {import.meta.env.DEV && !!debugInfo && <p className="mt-2 break-all text-[11px] text-slate-400">{debugInfo}</p>}
 
                 {!userCoords && permissionState === 'granted' && (
                   <button

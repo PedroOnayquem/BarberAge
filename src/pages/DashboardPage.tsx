@@ -197,7 +197,7 @@ export function DashboardPage() {
             {recentAppointments.map((apt) => {
               const s = statusMap[apt.status] || statusMap.pending
               return (
-                <div key={apt.id} className="flex items-center justify-between py-3">
+                <div key={apt.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     <div className="text-sm font-medium text-[var(--color-text)]">
                       {format(new Date(apt.start_at), 'HH:mm')}

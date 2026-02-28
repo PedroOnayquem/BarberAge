@@ -98,7 +98,7 @@ export function ShopLocationMap({ shop }: ShopLocationMapProps) {
             scrollWheelZoom={false}
             zoomControl={false}
             attributionControl={false}
-            className="shop-location-inline-map h-64 w-full"
+            className="shop-location-inline-map h-56 w-full sm:h-64"
           >
             <TileLayer
               attribution='&copy; OpenStreetMap contributors'

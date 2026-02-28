@@ -158,7 +158,7 @@ export function ProfessionalsPage() {
                 </Badge>
               </div>
 
-              <div className="mt-4 flex items-center justify-between border-t border-[var(--color-border)] pt-3">
+              <div className="mt-4 flex flex-col gap-2 border-t border-[var(--color-border)] pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <button
                   onClick={() => toggleActive(prof)}
                   className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
@@ -190,7 +190,7 @@ export function ProfessionalsPage() {
             autoComplete="tel"
             maxLength={15}
           />
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button type="submit" loading={formLoading}>{editingProfessional ? 'Salvar' : 'Cadastrar'}</Button>
           </div>

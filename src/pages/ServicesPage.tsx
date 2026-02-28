@@ -185,7 +185,7 @@ export function ServicesPage() {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center justify-between border-t border-[var(--color-border)] pt-3">
+              <div className="mt-4 flex flex-col gap-2 border-t border-[var(--color-border)] pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <button
                   onClick={() => toggleActive(service)}
                   className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
@@ -208,11 +208,11 @@ export function ServicesPage() {
             </div>
           )}
           <Input label="Nome do serviço" value={formName} onChange={(e) => setFormName(e.target.value)} helperText="Ex: Corte masculino" required />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Duração (minutos)" type="number" min="1" value={formDuration} onChange={(e) => setFormDuration(e.target.value)} helperText="30" required />
             <Input label="Preço (R$)" type="number" min="0" step="0.01" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} helperText="50.00" required />
           </div>
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button type="submit" loading={formLoading}>{editingService ? 'Salvar' : 'Cadastrar'}</Button>
           </div>

@@ -254,7 +254,7 @@ export function ClientsPage() {
             maxLength={15}
           />
           <Input label="Email" type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} helperText="email@exemplo.com" />
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button type="submit" loading={formLoading}>{editingClient ? 'Salvar' : 'Cadastrar'}</Button>
           </div>
@@ -265,7 +265,7 @@ export function ClientsPage() {
       <Modal open={detailModalOpen} onClose={() => setDetailModalOpen(false)} title={detailClient?.name || 'Cliente'} size="lg">
         {detailClient && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
               <div>
                 <p className="text-[var(--color-text-muted)]">Telefone</p>
                 <p className="font-medium text-[var(--color-text)]">{detailClient.phone ? formatPhone(detailClient.phone) : '—'}</p>
@@ -289,7 +289,7 @@ export function ClientsPage() {
               ) : (
                 <div className="max-h-60 space-y-2 overflow-y-auto">
                   {clientAppointments.map((apt: any) => (
-                    <div key={apt.id} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] p-3">
+                    <div key={apt.id} className="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] p-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm font-medium text-[var(--color-text)]">
                           {format(parseISO(apt.start_at), 'dd/MM/yyyy HH:mm')}

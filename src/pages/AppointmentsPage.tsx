@@ -300,7 +300,7 @@ export function AppointmentsPage() {
                 <div
                   key={apt.id}
                   onClick={() => { setSelectedAppointment(apt); setStatusModalOpen(true) }}
-                  className="flex cursor-pointer items-center justify-between rounded-lg border border-[var(--color-border)] p-4 transition-colors hover:bg-[var(--color-surface-muted)]"
+                  className="flex cursor-pointer flex-col gap-3 rounded-lg border border-[var(--color-border)] p-4 transition-colors hover:bg-[var(--color-surface-muted)] sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-center gap-4">
                     <div className="text-center">
@@ -354,7 +354,7 @@ export function AppointmentsPage() {
 
           <div className="space-y-1">
             <label className="block text-sm font-medium text-[var(--color-text)]">Serviços</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {services.map((s) => (
                 <label
                   key={s.id}
@@ -379,7 +379,7 @@ export function AppointmentsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <DatePickerField
               label="Data"
               value={formDate}
@@ -396,7 +396,7 @@ export function AppointmentsPage() {
             helperText="Opcional"
           />
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreateAppointment} loading={formLoading}>Agendar</Button>
           </div>
@@ -410,7 +410,7 @@ export function AppointmentsPage() {
             <p className="text-sm text-[var(--color-text-muted)]">
               {selectedAppointment.clients?.name} — {format(parseISO(selectedAppointment.start_at), 'HH:mm')}
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {Object.entries(statusMap).map(([key, val]) => (
                 <Button
                   key={key}
