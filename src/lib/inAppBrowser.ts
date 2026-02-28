@@ -10,6 +10,10 @@ const IN_APP_BROWSER_PATTERNS: Array<{ pattern: RegExp; source: string }> = [
   { pattern: /line\//i, source: 'LINE' },
   { pattern: /twitter/i, source: 'Twitter' },
   { pattern: /telegram/i, source: 'Telegram' },
+  { pattern: /linkedinapp/i, source: 'LinkedIn' },
+  { pattern: /micromessenger/i, source: 'WeChat' },
+  { pattern: /duckduckgo/i, source: 'DuckDuckGo' },
+  { pattern: /pinterest/i, source: 'Pinterest' },
   { pattern: /snapchat/i, source: 'Snapchat' },
   { pattern: /tiktok/i, source: 'TikTok' },
 ]
@@ -22,7 +26,11 @@ function detectIosWebView(userAgent: string) {
 }
 
 function detectAndroidWebView(userAgent: string) {
-  return /; wv\)|\bwv\b/i.test(userAgent)
+  return /; wv\)|\bwv\b|version\/\d+\.\d+ chrome\/\d+\.0\.\d+\.0 mobile safari\/\d+/i.test(userAgent)
+}
+
+function detectGeneralWebView(userAgent: string) {
+  return /\bwebview\b|cordova|crosswalk|okhttp|miuibrowser/i.test(userAgent)
 }
 
 export function getInAppBrowserDetection(userAgent?: string): InAppBrowserDetection {
@@ -43,5 +51,13 @@ export function getInAppBrowserDetection(userAgent?: string): InAppBrowserDetect
     return { isInAppBrowser: true, source: 'Android WebView' }
   }
 
+  if (detectGeneralWebView(ua)) {
+    return { isInAppBrowser: true, source: 'WebView' }
+  }
+
   return { isInAppBrowser: false, source: null }
+}
+
+export function isInAppBrowser(userAgent?: string) {
+  return getInAppBrowserDetection(userAgent).isInAppBrowser
 }

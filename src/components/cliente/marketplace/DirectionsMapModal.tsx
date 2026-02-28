@@ -3,11 +3,11 @@ import { createPortal } from 'react-dom'
 import { ExternalLink, Layers3, LocateFixed, Navigation, X } from 'lucide-react'
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet'
 import { divIcon, latLngBounds, type Map as LeafletMap } from 'leaflet'
-import { getInAppBrowserDetection } from '../../../lib/inAppBrowser'
+import { getInAppBrowserDetection, isInAppBrowser as detectInAppBrowser } from '../../../lib/inAppBrowser'
 import 'leaflet/dist/leaflet.css'
 
 type LatLngTuple = [number, number]
-type PermissionState = 'checking' | 'prompt' | 'granted' | 'denied' | 'unsupported' | 'insecure'
+type PermissionState = 'checking' | 'prompt' | 'granted' | 'denied' | 'unsupported' | 'insecure' | 'in_app'
 
 interface LatLngObject {
   lat: number
@@ -114,6 +114,10 @@ function isSecureGeolocationContext() {
   return host === 'localhost' || host === '127.0.0.1'
 }
 
+function isIOSDevice(userAgent: string) {
+  return /iphone|ipad|ipod/i.test(userAgent)
+}
+
 function getLocationErrorMessage(errorCode: number | null) {
   if (errorCode === GEO_ERROR_CODE_PERMISSION_DENIED) {
     return 'Permissao negada. Ative a localizacao nas configuracoes do navegador para continuar.'
@@ -213,7 +217,7 @@ export function DirectionsMapModal({
   const followUserRef = useRef(true)
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : ''
   const inAppDetection = useMemo(() => getInAppBrowserDetection(userAgent), [userAgent])
-  const isInAppBrowser = inAppDetection.isInAppBrowser
+  const isInAppBrowser = useMemo(() => detectInAppBrowser(userAgent), [userAgent])
 
   function logGeoEvent(event: string, payload?: Record<string, unknown>) {
     if (!import.meta.env.DEV) return
@@ -332,6 +336,45 @@ export function DirectionsMapModal({
     watchIdRef.current = watchId
   }
 
+  function startLocationRequest(source: 'click' | 'retry' | 'permission-change' | 'manual-refresh') {
+    if (!open || !shopCoords) return
+
+    if (!navigator.geolocation) {
+      setPermissionState('denied')
+      setPermissionMessage('Geolocalizacao nao suportada neste navegador.')
+      setLocationError({ code: null, message: 'Geolocation API not supported' })
+      setLoadingLocation(false)
+      return
+    }
+
+    const openSession = openSessionRef.current
+    setLoadingLocation(true)
+    setPermissionMessage('')
+    setRouteError('')
+    setLocationError(null)
+
+    logGeoEvent('start-location-request', {
+      source,
+      protocol: window.location.protocol,
+      origin: window.location.origin,
+      secureContext: isSecureGeolocationContext(),
+    })
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (openSessionRef.current !== openSession) return
+        setPermissionState('granted')
+        updateUserFromPosition(position.coords)
+        startWatchPosition(openSession)
+      },
+      (error) => {
+        if (openSessionRef.current !== openSession) return
+        handleLocationFailure(error, 'getCurrentPosition')
+      },
+      GEO_OPTIONS
+    )
+  }
+
   async function syncPermissionState(options?: { source?: string }) {
     if (!navigator.permissions?.query) {
       setPermissionApiState('unavailable')
@@ -351,6 +394,11 @@ export function DirectionsMapModal({
         const currentState = permissionStatus.state as PermissionState
         setPermissionState(currentState)
         logGeoEvent('permission-state-changed', { state: currentState })
+        if (currentState === 'granted' && open && !isInAppBrowser) {
+          setPermissionMessage('Permissao habilitada. Buscando sua localizacao...')
+          setLocationError(null)
+          startLocationRequest('permission-change')
+        }
       }
 
       logGeoEvent('permission-state', {
@@ -369,7 +417,7 @@ export function DirectionsMapModal({
     }
   }
 
-  async function handleRequestLocation() {
+  function handleRequestLocation() {
     if (!open || !shopCoords) return
 
     const requestTimestamp = Date.now()
@@ -383,6 +431,14 @@ export function DirectionsMapModal({
       inAppSource: inAppDetection.source || '',
     })
 
+    if (isInAppBrowser) {
+      setPermissionState('in_app')
+      setPermissionMessage('Para usar localizacao em tempo real, abra no Safari/Chrome (o navegador embutido bloqueia permissao).')
+      setLocationError({ code: GEO_ERROR_CODE_PERMISSION_DENIED, message: 'Blocked by in-app browser/WebView' })
+      setLoadingLocation(false)
+      return
+    }
+
     if (!isSecureGeolocationContext()) {
       setPermissionState('insecure')
       setPermissionMessage('Geolocalizacao exige HTTPS no celular. Abra o app em https:// para permitir localizacao.')
@@ -391,48 +447,16 @@ export function DirectionsMapModal({
       return
     }
 
-    const permissionBeforeRequest = await syncPermissionState({ source: 'request-click' })
-    if (permissionBeforeRequest === 'denied') {
-      setPermissionState('denied')
-      setPermissionMessage('Permissao negada no navegador. Habilite a localizacao e toque em "Recarregar apos habilitar".')
-      setLocationError({ code: GEO_ERROR_CODE_PERMISSION_DENIED, message: 'Permission state denied before request' })
-      setLoadingLocation(false)
-      return
-    }
-
-    if (!navigator.geolocation) {
-      setPermissionState('denied')
-      setPermissionMessage('Geolocalizacao nao suportada neste navegador.')
-      setLocationError({ code: null, message: 'Geolocation API not supported' })
-      return
-    }
-
-    const openSession = openSessionRef.current
-    setLoadingLocation(true)
-    setPermissionMessage('')
-    setRouteError('')
-    setLocationError(null)
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (openSessionRef.current !== openSession) return
-        setPermissionState('granted')
-        updateUserFromPosition(position.coords)
-        startWatchPosition(openSession)
-      },
-      (error) => {
-        if (openSessionRef.current !== openSession) return
-        handleLocationFailure(error, 'getCurrentPosition')
-      },
-      GEO_OPTIONS
-    )
+    startLocationRequest('click')
+    void syncPermissionState({ source: 'request-click' })
   }
 
   async function handleRefreshPermission() {
     const nextState = await syncPermissionState({ source: 'manual-refresh' })
     if (nextState === 'granted') {
-      setPermissionMessage('Permissao habilitada. Toque em "Tentar novamente" para buscar sua localizacao.')
+      setPermissionMessage('Permissao habilitada. Buscando sua localizacao...')
       setLocationError(null)
+      startLocationRequest('manual-refresh')
     }
   }
 
@@ -486,6 +510,10 @@ export function DirectionsMapModal({
     if (!shopCoords) {
       setPermissionState('denied')
       setPermissionMessage('Localizacao ainda nao configurada para esta barbearia.')
+    } else if (isInAppBrowser) {
+      setPermissionState('in_app')
+      setPermissionMessage('Para usar localizacao em tempo real, abra no Safari/Chrome (o navegador embutido bloqueia permissao).')
+      setLocationError({ code: GEO_ERROR_CODE_PERMISSION_DENIED, message: 'Blocked by in-app browser/WebView' })
     } else if (!isSecureGeolocationContext()) {
       setPermissionState('insecure')
       setPermissionMessage('Geolocalizacao exige HTTPS no celular. Abra o app em https:// para permitir localizacao.')
@@ -686,11 +714,15 @@ export function DirectionsMapModal({
   const showPermissionPrompt =
     !userCoords && !loadingLocation && (permissionState === 'prompt' || permissionState === 'unsupported')
   const showDeniedFallback = !userCoords && !loadingLocation && permissionState === 'denied'
+  const showInAppBlocked = !userCoords && !loadingLocation && permissionState === 'in_app'
   const showInsecureContext = !userCoords && !loadingLocation && permissionState === 'insecure'
   const showPermissionChecking = !userCoords && permissionState === 'checking'
   const locationStatusMessage =
     permissionMessage || (!userCoords && loadingLocation ? 'Localizando...' : '')
   const showInAppWarning = !userCoords && isInAppBrowser
+  const inAppOpenHint = isIOSDevice(userAgent)
+    ? 'iPhone: toque em (...) e escolha "Abrir no Safari".'
+    : 'Android: toque em ⋮ e escolha "Abrir no Chrome".'
   const debugInfo = import.meta.env.DEV
     ? [
         `ua=${userAgent}`,
@@ -831,17 +863,27 @@ export function DirectionsMapModal({
                 {permissionMessage && <p className="text-xs text-slate-300">{permissionMessage}</p>}
                 {showInAppWarning && (
                   <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
-                    Navegador embutido detectado ({inAppDetection.source || 'in-app'}). Abra no Chrome/Safari para usar localizacao.
+                    Para usar localizacao em tempo real, abra no Safari/Chrome (o navegador do WhatsApp/Instagram pode bloquear permissoes).
+                    <p className="mt-1 text-amber-100/90">{inAppOpenHint}</p>
                   </div>
                 )}
                 {import.meta.env.DEV && !!debugInfo && <p className="break-all text-[11px] text-slate-400">{debugInfo}</p>}
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <button
-                    onClick={handleRequestLocation}
-                    className="rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-400"
-                  >
-                    Permitir localizacao
-                  </button>
+                  {showInAppWarning ? (
+                    <button
+                      onClick={handleOpenInBrowser}
+                      className="rounded-xl bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300"
+                    >
+                      Abrir no navegador
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleRequestLocation}
+                      className="rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-400"
+                    >
+                      Permitir localizacao
+                    </button>
+                  )}
                   <button
                     onClick={onClose}
                     className="rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/10"
@@ -849,14 +891,39 @@ export function DirectionsMapModal({
                     Cancelar
                   </button>
                 </div>
-                {showInAppWarning && (
+              </div>
+            )}
+
+            {showInAppBlocked && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-slate-50">Abra no navegador para usar localizacao</h3>
+                <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+                  Navegador embutido detectado ({inAppDetection.source || 'in-app'}). O popup de permissao pode ser bloqueado nesse ambiente.
+                  <p className="mt-1 text-amber-100/90">{inAppOpenHint}</p>
+                </div>
+                {permissionMessage && <p className="text-xs text-slate-300">{permissionMessage}</p>}
+                {import.meta.env.DEV && !!debugInfo && <p className="break-all text-[11px] text-slate-400">{debugInfo}</p>}
+                <div className="grid gap-2 sm:grid-cols-2">
                   <button
                     onClick={handleOpenInBrowser}
-                    className="w-full rounded-xl border border-amber-300/40 bg-amber-300/10 px-3 py-2 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-300/20"
+                    className="rounded-xl bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300"
                   >
                     Abrir no navegador
                   </button>
-                )}
+                  <button
+                    onClick={() => openExternal(googleMapsUrl)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/10"
+                  >
+                    <Navigation size={16} />
+                    Abrir no Google Maps
+                  </button>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/10"
+                >
+                  Fechar
+                </button>
               </div>
             )}
 
@@ -904,6 +971,7 @@ export function DirectionsMapModal({
                 {showInAppWarning && (
                   <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
                     Navegador embutido detectado ({inAppDetection.source || 'in-app'}). Abra no Chrome/Safari para liberar localizacao.
+                    <p className="mt-1 text-amber-100/90">{inAppOpenHint}</p>
                   </div>
                 )}
                 {import.meta.env.DEV && !!debugInfo && <p className="break-all text-[11px] text-slate-400">{debugInfo}</p>}
@@ -958,7 +1026,7 @@ export function DirectionsMapModal({
               </div>
             )}
 
-            {!showPermissionChecking && !showPermissionPrompt && !showDeniedFallback && !showInsecureContext && (
+            {!showPermissionChecking && !showPermissionPrompt && !showDeniedFallback && !showInAppBlocked && !showInsecureContext && (
               <>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-300">Rota</p>
                 <h3 className="mt-1 text-lg font-bold text-slate-50">{shopName}</h3>
