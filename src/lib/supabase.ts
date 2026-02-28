@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '../types/database'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+const supabaseUrl = (rawSupabaseUrl || '').trim().replace(/\/+$/, '')
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -29,6 +30,12 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 const client = createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 if (import.meta.env.DEV) {
+  if (rawSupabaseUrl !== supabaseUrl) {
+    console.warn(
+      `[supabase][dev-check] VITE_SUPABASE_URL foi normalizada de '${rawSupabaseUrl}' para '${supabaseUrl}'.`
+    )
+  }
+
   const refFromUrl = extractProjectRefFromUrl(supabaseUrl)
   const payload = decodeJwtPayload(supabaseAnonKey)
   const refFromKey = typeof payload?.ref === 'string' ? payload.ref : null
@@ -58,3 +65,4 @@ if (import.meta.env.DEV) {
 }
 
 export const supabase = client
+export const supabaseProjectUrl = supabaseUrl

@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { AppLayout } from './components/layout/AppLayout'
-import { ClientLayout } from './components/layout/ClientLayout'
+import { ClientMobileLayout } from './components/layout/ClientMobileLayout'
 import { LoginPage } from './pages/auth/LoginPage'
 import { RegisterPage } from './pages/auth/RegisterPage'
 import { RegisterClientPage } from './pages/auth/RegisterClientPage'
@@ -19,6 +19,8 @@ import { BarbershopsPage } from './pages/public/BarbershopsPage'
 import { BarbershopPublicPage } from './pages/public/BarbershopPublicPage'
 import { ClientBarbershopsPage } from './pages/cliente/ClientBarbershopsPage'
 import { ClientBarbershopBookingPage } from './pages/cliente/ClientBarbershopBookingPage'
+import { ClientSearchPage } from './pages/cliente/ClientSearchPage'
+import { ClientProfilePage } from './pages/cliente/ClientProfilePage'
 import type { ReactNode } from 'react'
 
 function LoadingScreen() {
@@ -98,12 +100,14 @@ function AppRoutes() {
       </Route>
 
       {/* Client routes (/cliente/*) */}
-      <Route path="/cliente" element={<ClientProtectedRoute><ClientLayout /></ClientProtectedRoute>}>
+      <Route path="/cliente" element={<ClientProtectedRoute><ClientMobileLayout /></ClientProtectedRoute>}>
         <Route index element={<Navigate to="/cliente/barbearias" replace />} />
         <Route path="barbearias" element={<ClientBarbershopsPage />} />
+        <Route path="buscar" element={<ClientSearchPage />} />
         <Route path="barbearias/:slug" element={<ClientBarbershopBookingPage />} />
         <Route path="agendar" element={<ClientBookingPage />} />
         <Route path="agendamentos" element={<ClientAppointmentsPage />} />
+        <Route path="perfil" element={<ClientProfilePage />} />
       </Route>
 
       {/* Default redirect */}

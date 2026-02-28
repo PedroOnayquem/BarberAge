@@ -8,7 +8,6 @@ import {
   Settings,
   LogOut,
   X,
-  Armchair,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
@@ -44,16 +43,22 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       >
         <div className="px-4 pb-5 pt-4 lg:px-3">
           <div className="flex items-start justify-between">
-            <div className="flex min-w-0 items-start gap-3 lg:w-full lg:justify-center lg:group-hover/sidebar:justify-start">
+            <div className="flex min-w-0 items-center gap-3 lg:w-full lg:justify-center lg:group-hover/sidebar:justify-start">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/12 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]">
-                <Armchair className="h-6 w-6 text-white" />
+                <img
+                  src="/apple-touch-icon.png"
+                  alt="Logo BarberAge"
+                  className="h-6 w-6 object-contain sm:h-6 sm:w-6 lg:h-7 lg:w-7"
+                  loading="eager"
+                  decoding="async"
+                />
               </div>
-              <div className="space-y-1 overflow-hidden">
-                <span className="block max-w-[11rem] whitespace-nowrap text-lg font-bold text-white transition-[max-width,opacity,transform] duration-300 ease-out lg:max-w-0 lg:-translate-x-1 lg:opacity-0 lg:group-hover/sidebar:max-w-[11rem] lg:group-hover/sidebar:translate-x-0 lg:group-hover/sidebar:opacity-100">
-                  BarberAge
+              <div className="overflow-hidden">
+                <span className="block max-w-[11rem] whitespace-nowrap text-lg font-bold uppercase tracking-[0.12em] text-white transition-[max-width,opacity,transform] duration-300 ease-out lg:max-w-0 lg:-translate-x-1 lg:opacity-0 lg:group-hover/sidebar:max-w-[11rem] lg:group-hover/sidebar:translate-x-0 lg:group-hover/sidebar:opacity-100">
+                  BARBERAGE
                 </span>
-                <span className="inline-flex max-w-[8rem] items-center rounded-full bg-[color-mix(in_srgb,var(--color-primary)_35%,transparent)] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white transition-[max-width,opacity,transform] duration-300 ease-out lg:max-w-0 lg:-translate-x-1 lg:opacity-0 lg:group-hover/sidebar:max-w-[8rem] lg:group-hover/sidebar:translate-x-0 lg:group-hover/sidebar:opacity-100">
-                  Premium
+                <span className="mt-0.5 block max-w-[11rem] whitespace-nowrap text-xs font-medium text-white/78 transition-[max-width,opacity,transform] duration-300 ease-out lg:max-w-0 lg:-translate-x-1 lg:opacity-0 lg:group-hover/sidebar:max-w-[11rem] lg:group-hover/sidebar:translate-x-0 lg:group-hover/sidebar:opacity-100">
+                  Área da Barbearia
                 </span>
               </div>
             </div>

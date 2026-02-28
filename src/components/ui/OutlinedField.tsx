@@ -68,10 +68,14 @@ export function OutlinedField({
   const Icon = resolveIcon(as, type, icon)
   const withIcon = Icon ? 'pr-10' : ''
   const baseField =
-    'w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-input-bg)] text-sm text-[var(--color-text)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/25 disabled:cursor-not-allowed disabled:opacity-60'
+    'outlined-field-control w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-input-bg)] text-sm text-[var(--color-text)] hover:bg-[var(--color-input-bg)] focus:bg-[var(--color-input-bg)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/25 disabled:cursor-not-allowed disabled:opacity-60'
   const padding = as === 'textarea' ? 'px-3.5 pb-3 pt-5' : 'px-3.5 pb-2 pt-5'
   const selectFix = as === 'select' ? 'appearance-none' : ''
   const fieldClasses = `${baseField} ${padding} ${withIcon} ${selectFix} ${error ? 'border-red-500' : ''} ${className}`
+  const valueProps =
+    value !== undefined
+      ? { value: value as string | number | readonly string[] | undefined }
+      : { defaultValue: defaultValue as string | number | readonly string[] | undefined }
 
   return (
     <div className={`space-y-1.5 ${containerClassName}`}>
@@ -80,8 +84,7 @@ export function OutlinedField({
           <textarea
             id={fieldId}
             name={name}
-            value={value as string | number | readonly string[] | undefined}
-            defaultValue={defaultValue as string | number | readonly string[] | undefined}
+            {...valueProps}
             onFocus={onFocus}
             onBlur={onBlur}
             onChange={onChange}
@@ -94,8 +97,7 @@ export function OutlinedField({
           <select
             id={fieldId}
             name={name}
-            value={value as string | number | readonly string[] | undefined}
-            defaultValue={defaultValue as string | number | readonly string[] | undefined}
+            {...valueProps}
             onFocus={onFocus}
             onBlur={onBlur}
             onChange={onChange}
@@ -111,8 +113,7 @@ export function OutlinedField({
             id={fieldId}
             name={name}
             type={type}
-            value={value as string | number | readonly string[] | undefined}
-            defaultValue={defaultValue as string | number | readonly string[] | undefined}
+            {...valueProps}
             onFocus={onFocus}
             onBlur={onBlur}
             onChange={onChange}

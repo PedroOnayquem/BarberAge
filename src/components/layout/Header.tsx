@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Menu, Moon, Sun, Sparkles } from 'lucide-react'
+import { Menu, Moon, Sun } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { getSignedAvatarUrl, SHOP_AVATARS_BUCKET } from '../../lib/avatarStorage'
@@ -29,26 +29,14 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   return (
     <header className="relative border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-      <div className="mx-auto flex h-[72px] items-center justify-between px-4 lg:px-6">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onMenuClick}
-            className="rounded-xl p-2 text-[var(--color-text)] hover:bg-[var(--color-surface-muted)] lg:hidden"
-            aria-label="Abrir menu"
-          >
-            <Menu size={20} />
-          </button>
-
-          <div className="hidden items-center gap-2 lg:flex">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--color-text)] text-[var(--color-bg-elevated)] shadow-sm">
-              <Sparkles size={16} />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">BarberAge</p>
-              <p className="text-sm font-bold text-[var(--color-text)]">Painel Premium</p>
-            </div>
-          </div>
-        </div>
+      <div className="mx-auto relative flex h-[72px] items-center justify-end px-4 lg:px-6">
+        <button
+          onClick={onMenuClick}
+          className="absolute left-4 rounded-xl p-2 text-[var(--color-text)] hover:bg-[var(--color-surface-muted)] lg:hidden"
+          aria-label="Abrir menu"
+        >
+          <Menu size={20} />
+        </button>
 
         <div className="flex items-center gap-3">
           <button

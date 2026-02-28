@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Plus, Phone, Mail } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -10,6 +10,7 @@ import { Badge } from '../components/ui/Badge'
 import { format, parseISO } from 'date-fns'
 import { translateError } from '../lib/errorMessages'
 import { CLIENT_AVATARS_BUCKET, getSignedAvatarUrl } from '../lib/avatarStorage'
+import { caretIndexFromDigitCount, countDigitsBeforeCaret, formatPhone, normalizePhone } from '../lib/phone'
 import type { Tables } from '../types/database'
 
 type Client = Tables<'clients'>
@@ -84,10 +85,24 @@ export function ClientsPage() {
     setModalOpen(true)
   }
 
+  function handlePhoneChange(e: ChangeEvent<HTMLInputElement>) {
+    const rawValue = e.target.value
+    const currentCaret = e.target.selectionStart ?? rawValue.length
+    const digitsBeforeCaret = countDigitsBeforeCaret(rawValue, currentCaret)
+    const formattedValue = formatPhone(rawValue)
+    const nextCaret = caretIndexFromDigitCount(formattedValue, digitsBeforeCaret)
+
+    setFormPhone(formattedValue)
+
+    requestAnimationFrame(() => {
+      e.target.setSelectionRange(nextCaret, nextCaret)
+    })
+  }
+
   function openEdit(client: Client) {
     setEditingClient(client)
     setFormName(client.name)
-    setFormPhone(client.phone || '')
+    setFormPhone(formatPhone(client.phone || ''))
     setFormEmail(client.email || '')
     setFormError('')
     setModalOpen(true)
@@ -113,10 +128,12 @@ export function ClientsPage() {
     setFormError('')
     setFormLoading(true)
 
+    const normalizedPhone = normalizePhone(formPhone)
+
     const payload = {
       shop_id: currentShop.id,
       name: formName,
-      phone: formPhone || null,
+      phone: normalizedPhone || null,
       email: formEmail || null,
     }
 
@@ -135,7 +152,7 @@ export function ClientsPage() {
 
   const filtered = clients.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search) ||
+    normalizePhone(c.phone || '').includes(normalizePhone(search)) ||
     c.email?.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -198,7 +215,7 @@ export function ClientsPage() {
                 <div className="mt-3 space-y-1">
                   {client.phone && (
                     <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
-                      <Phone size={14} /> {client.phone}
+                      <Phone size={14} /> {formatPhone(client.phone)}
                     </div>
                   )}
                   {client.email && (
@@ -227,7 +244,15 @@ export function ClientsPage() {
             </div>
           )}
           <Input label="Nome" value={formName} onChange={(e) => setFormName(e.target.value)} required />
-          <Input label="Telefone" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} helperText="(11) 99999-9999" />
+          <Input
+            label="Telefone"
+            value={formPhone}
+            onChange={handlePhoneChange}
+            helperText="(11) 99999-9999"
+            inputMode="numeric"
+            autoComplete="tel"
+            maxLength={15}
+          />
           <Input label="Email" type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} helperText="email@exemplo.com" />
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancelar</Button>
@@ -243,7 +268,7 @@ export function ClientsPage() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-[var(--color-text-muted)]">Telefone</p>
-                <p className="font-medium text-[var(--color-text)]">{detailClient.phone || '—'}</p>
+                <p className="font-medium text-[var(--color-text)]">{detailClient.phone ? formatPhone(detailClient.phone) : '—'}</p>
               </div>
               <div>
                 <p className="text-[var(--color-text-muted)]">Email</p>

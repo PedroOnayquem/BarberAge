@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CalendarDays, ChevronLeft, Clock4, MapPin, UserRound } from 'lucide-react'
 import { format, startOfDay } from 'date-fns'
@@ -9,6 +9,7 @@ import { DatePickerCard } from '../../components/ui/DatePickerCard'
 import { Card } from '../../components/ui/Card'
 import { getSignedAvatarUrl, SHOP_AVATARS_BUCKET } from '../../lib/avatarStorage'
 import { translateError } from '../../lib/errorMessages'
+import { caretIndexFromDigitCount, countDigitsBeforeCaret, formatPhone, normalizePhone } from '../../lib/phone'
 import type { Tables } from '../../types/database'
 
 type Shop = Tables<'shops'>
@@ -34,6 +35,7 @@ export function BarbershopPublicPage() {
   const [slots, setSlots] = useState<Slot[]>([])
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [slotsLoading, setSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState('')
 
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
@@ -44,6 +46,20 @@ export function BarbershopPublicPage() {
   useEffect(() => {
     if (slug) loadPageData(slug)
   }, [slug])
+
+  function handleProfilePhoneChange(e: ChangeEvent<HTMLInputElement>) {
+    const rawValue = e.target.value
+    const currentCaret = e.target.selectionStart ?? rawValue.length
+    const digitsBeforeCaret = countDigitsBeforeCaret(rawValue, currentCaret)
+    const formattedValue = formatPhone(rawValue)
+    const nextCaret = caretIndexFromDigitCount(formattedValue, digitsBeforeCaret)
+
+    setProfilePhone(formattedValue)
+
+    requestAnimationFrame(() => {
+      e.target.setSelectionRange(nextCaret, nextCaret)
+    })
+  }
 
   async function loadPageData(shopSlug: string) {
     setLoading(true)
@@ -78,18 +94,49 @@ export function BarbershopPublicPage() {
   async function loadSlots(params: { date: Date; professional: Professional; service: Service }) {
     if (!shop) return
     setSlotsLoading(true)
+    setSlotsError('')
     setSelectedSlot(null)
     setSlots([])
+    const requestDate = format(params.date, 'yyyy-MM-dd')
+    const requestPayload = {
+      shopId: shop.id,
+      professionalId: params.professional.id,
+      serviceId: params.service.id,
+      date: requestDate,
+      timezone: shop.timezone || 'America/Sao_Paulo',
+      durationMinutes: params.service.duration_minutes,
+    }
+
+    if (import.meta.env.DEV) {
+      console.info('[slots][public-booking] request', requestPayload)
+    }
 
     const { data, error } = await supabase.rpc('get_available_slots', {
       p_shop_id: shop.id,
       p_professional_id: params.professional.id,
-      p_date: format(params.date, 'yyyy-MM-dd'),
+      p_date: requestDate,
       p_duration_minutes: params.service.duration_minutes,
     })
 
-    if (!error && data) {
-      setSlots(data as Slot[])
+    if (error) {
+      if (import.meta.env.DEV) {
+        console.error('[slots][public-booking] response error', {
+          ...requestPayload,
+          error,
+        })
+      }
+      setSlotsError('Não foi possível carregar horários agora. Tente novamente em instantes.')
+      setSlotsLoading(false)
+      return
+    }
+
+    const parsedSlots = (Array.isArray(data) ? data : []) as Slot[]
+    setSlots(parsedSlots)
+    if (import.meta.env.DEV) {
+      console.info('[slots][public-booking] response ok', {
+        ...requestPayload,
+        totalSlots: parsedSlots.length,
+      })
     }
     setSlotsLoading(false)
   }
@@ -117,10 +164,11 @@ export function BarbershopPublicPage() {
 
     if (!clientId) {
       const fallbackName = profileName.trim() || user.email?.split('@')[0] || 'Cliente'
+      const normalizedProfilePhone = normalizePhone(profilePhone)
       const { data: newClientId, error: registerError } = await supabase.rpc('register_client', {
         p_shop_id: shop.id,
         p_name: fallbackName,
-        p_phone: profilePhone.trim() || null,
+        p_phone: normalizedProfilePhone || null,
         p_email: user.email || null,
       })
 
@@ -132,34 +180,28 @@ export function BarbershopPublicPage() {
       clientId = newClientId as string
     }
 
-    const { data: appointment, error: appointmentError } = await supabase
-      .from('appointments')
-      .insert({
-        shop_id: shop.id,
-        client_id: clientId,
-        professional_id: selectedProfessional.id,
-        start_at: selectedSlot.slot_start,
-        end_at: selectedSlot.slot_end,
-        status: 'pending',
-      })
-      .select('id')
-      .single()
-
-    if (appointmentError || !appointment) {
-      setBookingError(translateError(appointmentError?.message || 'Não foi possível criar o agendamento.'))
-      setBookingLoading(false)
-      return
-    }
-
-    const { error: serviceError } = await supabase.from('appointment_services').insert({
-      appointment_id: appointment.id,
-      service_id: selectedService.id,
-      duration_minutes: selectedService.duration_minutes,
-      price: selectedService.price,
+    const { error: appointmentError } = await supabase.rpc('create_appointment_safe', {
+      p_shop_id: shop.id,
+      p_client_id: clientId,
+      p_professional_id: selectedProfessional.id,
+      p_start_at: selectedSlot.slot_start,
+      p_service_ids: [selectedService.id],
+      p_notes: null,
     })
 
-    if (serviceError) {
-      setBookingError(translateError(serviceError.message))
+    if (appointmentError) {
+      const lowerMessage = appointmentError.message.toLowerCase()
+      const isUnavailable =
+        lowerMessage.includes('horario indisponivel') ||
+        lowerMessage.includes('appointments_no_overlap') ||
+        lowerMessage.includes('conflito')
+
+      if (isUnavailable) {
+        setBookingError('Este horário acabou de ser reservado. Escolha outro.')
+        await loadSlots({ date: selectedDate, professional: selectedProfessional, service: selectedService })
+      } else {
+        setBookingError(translateError(appointmentError.message || 'Não foi possível criar o agendamento.'))
+      }
       setBookingLoading(false)
       return
     }
@@ -288,13 +330,24 @@ export function BarbershopPublicPage() {
             )}
 
             {canLoadSlots && slotsLoading && (
-              <div className="flex items-center justify-center py-8">
-                <div className="h-7 w-7 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
+              <div className="grid grid-cols-2 gap-2 py-2 sm:grid-cols-3 lg:grid-cols-4">
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <div
+                    key={`slot-skeleton-public-${index}`}
+                    className="h-10 animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)]"
+                  />
+                ))}
               </div>
             )}
 
-            {canLoadSlots && !slotsLoading && slots.length === 0 && (
-              <p className="text-sm text-[var(--color-text-muted)]">Nenhum horário disponível nesta data.</p>
+            {canLoadSlots && !slotsLoading && slotsError && (
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+                {slotsError}
+              </div>
+            )}
+
+            {canLoadSlots && !slotsLoading && !slotsError && slots.length === 0 && (
+              <p className="text-sm text-[var(--color-text-muted)]">Nenhum horário disponível para esta data. Tente outra data.</p>
             )}
 
             {canLoadSlots && !slotsLoading && slots.length > 0 && (
@@ -322,6 +375,9 @@ export function BarbershopPublicPage() {
 
         <Card className="mt-4">
           <h2 className="mb-3 text-base font-semibold text-[var(--color-text)]">Confirmar agendamento</h2>
+          {selectedService && (
+            <p className="mb-3 text-sm text-[var(--color-text-muted)]">Duração: {selectedService.duration_minutes} min</p>
+          )}
 
           {!user && (
             <p className="mb-3 text-sm text-[var(--color-text-muted)]">
@@ -344,9 +400,12 @@ export function BarbershopPublicPage() {
                 <label className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Telefone</label>
                 <input
                   value={profilePhone}
-                  onChange={(e) => setProfilePhone(e.target.value)}
+                  onChange={handleProfilePhoneChange}
                   className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-input-bg)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
                   placeholder="Opcional"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  maxLength={15}
                 />
               </div>
             </div>

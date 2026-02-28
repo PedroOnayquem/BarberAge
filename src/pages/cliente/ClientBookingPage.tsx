@@ -33,6 +33,7 @@ export function ClientBookingPage() {
   const [slots, setSlots] = useState<Slot[]>([])
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [slotsLoading, setSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState('')
 
   // Booking
   const [bookingLoading, setBookingLoading] = useState(false)
@@ -68,6 +69,7 @@ export function ClientBookingPage() {
   async function loadSlots(date: Date, professional: Professional) {
     if (!shopId) return
     setSlotsLoading(true)
+    setSlotsError('')
     setSlots([])
     setSelectedSlot(null)
 
@@ -78,7 +80,13 @@ export function ClientBookingPage() {
       p_duration_minutes: totalDuration || 30,
     })
 
-    if (!error && data) {
+    if (error) {
+      setSlotsError('Não foi possível carregar horários agora. Tente novamente em instantes.')
+      setSlotsLoading(false)
+      return
+    }
+
+    if (data) {
       setSlots(data as Slot[])
     }
     setSlotsLoading(false)
@@ -86,55 +94,47 @@ export function ClientBookingPage() {
 
   function handleDateChange(date: Date) {
     setSelectedDate(date)
-    if (selectedProfessional) {
-      loadSlots(date, selectedProfessional)
-    }
   }
 
   function handleProfessionalSelect(prof: Professional) {
     setSelectedProfessional(prof)
     setStep('datetime')
-    loadSlots(selectedDate, prof)
   }
+
+  useEffect(() => {
+    if (!selectedProfessional || totalDuration <= 0) return
+    loadSlots(selectedDate, selectedProfessional)
+  }, [selectedDate, selectedProfessional, totalDuration])
 
   async function handleBooking() {
     if (!shopId || !clientUser || !selectedProfessional || !selectedSlot) return
     setBookingError('')
     setBookingLoading(true)
 
-    const { data: apt, error: aptError } = await supabase
-      .from('appointments')
-      .insert({
-        shop_id: shopId,
-        client_id: clientUser.client_id,
-        professional_id: selectedProfessional.id,
-        start_at: selectedSlot.slot_start,
-        end_at: selectedSlot.slot_end,
-        status: 'pending',
-      })
-      .select()
-      .single()
+    const { error: aptError } = await supabase.rpc('create_appointment_safe', {
+      p_shop_id: shopId,
+      p_client_id: clientUser.client_id,
+      p_professional_id: selectedProfessional.id,
+      p_start_at: selectedSlot.slot_start,
+      p_service_ids: selectedServices.map((service) => service.id),
+      p_notes: null,
+    })
 
     if (aptError) {
-      if (aptError.message.includes('appointments_no_overlap')) {
+      const lowerMessage = aptError.message.toLowerCase()
+      const isUnavailable =
+        lowerMessage.includes('horario indisponivel') ||
+        lowerMessage.includes('appointments_no_overlap') ||
+        lowerMessage.includes('conflito')
+
+      if (isUnavailable) {
         setBookingError('Este horário já foi reservado. Escolha outro.')
+        await loadSlots(selectedDate, selectedProfessional)
       } else {
         setBookingError(translateError(aptError.message))
       }
       setBookingLoading(false)
       return
-    }
-
-    // Insert appointment services
-    if (selectedServices.length > 0) {
-      await supabase.from('appointment_services').insert(
-        selectedServices.map((s) => ({
-          appointment_id: apt.id,
-          service_id: s.id,
-          duration_minutes: s.duration_minutes,
-          price: s.price,
-        }))
-      )
     }
 
     setBookingSuccess(true)
@@ -310,10 +310,16 @@ export function ClientBookingPage() {
             <div className="flex items-center justify-center py-10">
               <div className="h-6 w-6 animate-spin rounded-full border-4 border-[#b11226] border-t-transparent" />
             </div>
+          ) : slotsError ? (
+            <Card>
+              <p className="py-6 text-center text-sm text-[#8b9bb8]">
+                {slotsError}
+              </p>
+            </Card>
           ) : slots.length === 0 ? (
             <Card>
               <p className="py-6 text-center text-sm text-[#8b9bb8]">
-                Nenhum horário disponível nesta data
+                Nenhum horário disponível nesta data. Tente outra data.
               </p>
             </Card>
           ) : (

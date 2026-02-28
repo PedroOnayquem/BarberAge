@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Plus, UserCog, ToggleLeft, ToggleRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -8,6 +8,7 @@ import { Modal } from '../components/ui/Modal'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { translateError } from '../lib/errorMessages'
+import { caretIndexFromDigitCount, countDigitsBeforeCaret, formatPhone, normalizePhone } from '../lib/phone'
 import type { Tables } from '../types/database'
 
 type Professional = Tables<'professionals'>
@@ -51,9 +52,23 @@ export function ProfessionalsPage() {
   function openEdit(prof: Professional) {
     setEditingProfessional(prof)
     setFormName(prof.name)
-    setFormPhone(prof.phone || '')
+    setFormPhone(formatPhone(prof.phone || ''))
     setFormError('')
     setModalOpen(true)
+  }
+
+  function handlePhoneChange(e: ChangeEvent<HTMLInputElement>) {
+    const rawValue = e.target.value
+    const currentCaret = e.target.selectionStart ?? rawValue.length
+    const digitsBeforeCaret = countDigitsBeforeCaret(rawValue, currentCaret)
+    const formattedValue = formatPhone(rawValue)
+    const nextCaret = caretIndexFromDigitCount(formattedValue, digitsBeforeCaret)
+
+    setFormPhone(formattedValue)
+
+    requestAnimationFrame(() => {
+      e.target.setSelectionRange(nextCaret, nextCaret)
+    })
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -62,10 +77,12 @@ export function ProfessionalsPage() {
     setFormError('')
     setFormLoading(true)
 
+    const normalizedPhone = normalizePhone(formPhone)
+
     const payload = {
       shop_id: currentShop.id,
       name: formName,
-      phone: formPhone || null,
+      phone: normalizedPhone || null,
     }
 
     if (editingProfessional) {
@@ -132,7 +149,7 @@ export function ProfessionalsPage() {
                   <div>
                     <h3 className="font-semibold text-[var(--color-text)]">{prof.name}</h3>
                     {prof.phone && (
-                      <p className="text-sm text-[var(--color-text-muted)]">{prof.phone}</p>
+                      <p className="text-sm text-[var(--color-text-muted)]">{formatPhone(prof.phone)}</p>
                     )}
                   </div>
                 </div>
@@ -164,7 +181,15 @@ export function ProfessionalsPage() {
             </div>
           )}
           <Input label="Nome" value={formName} onChange={(e) => setFormName(e.target.value)} required />
-          <Input label="Telefone" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} helperText="(11) 99999-9999" />
+          <Input
+            label="Telefone"
+            value={formPhone}
+            onChange={handlePhoneChange}
+            helperText="(11) 99999-9999"
+            inputMode="numeric"
+            autoComplete="tel"
+            maxLength={15}
+          />
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button type="submit" loading={formLoading}>{editingProfessional ? 'Salvar' : 'Cadastrar'}</Button>

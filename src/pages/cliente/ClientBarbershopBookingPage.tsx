@@ -7,8 +7,10 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { DatePickerCard } from '../../components/ui/DatePickerCard'
 import { Card } from '../../components/ui/Card'
+import { ShopLocationMap } from '../../components/cliente/marketplace/ShopLocationMap'
 import { getSignedAvatarUrl, SHOP_AVATARS_BUCKET } from '../../lib/avatarStorage'
 import { translateError } from '../../lib/errorMessages'
+import { normalizePhone } from '../../lib/phone'
 import type { Tables } from '../../types/database'
 
 type Shop = Tables<'shops'>
@@ -33,6 +35,7 @@ export function ClientBarbershopBookingPage() {
   const [slots, setSlots] = useState<Slot[]>([])
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [slotsLoading, setSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState('')
 
   const [bookingLoading, setBookingLoading] = useState(false)
   const [bookingError, setBookingError] = useState('')
@@ -75,19 +78,52 @@ export function ClientBarbershopBookingPage() {
   async function loadSlots(params: { date: Date; professional: Professional; service: Service }) {
     if (!shop) return
     setSlotsLoading(true)
+    setSlotsError('')
     setSelectedSlot(null)
     setSlots([])
+    const requestDate = format(params.date, 'yyyy-MM-dd')
+    const requestPayload = {
+      shopId: shop.id,
+      professionalId: params.professional.id,
+      serviceId: params.service.id,
+      date: requestDate,
+      timezone: shop.timezone || 'America/Sao_Paulo',
+      durationMinutes: params.service.duration_minutes,
+    }
+
+    if (import.meta.env.DEV) {
+      console.info('[slots][client-booking] request', requestPayload)
+    }
 
     const { data, error } = await supabase.rpc('get_available_slots', {
       p_shop_id: shop.id,
       p_professional_id: params.professional.id,
-      p_date: format(params.date, 'yyyy-MM-dd'),
+      p_date: requestDate,
       p_duration_minutes: params.service.duration_minutes,
     })
 
-    if (!error && data) {
-      setSlots(data as Slot[])
+    if (error) {
+      if (import.meta.env.DEV) {
+        console.error('[slots][client-booking] response error', {
+          ...requestPayload,
+          error,
+        })
+      }
+      setSlotsError('Não foi possível carregar horários agora. Tente novamente em instantes.')
+      setSlotsLoading(false)
+      return
     }
+
+    const parsedSlots = (Array.isArray(data) ? data : []) as Slot[]
+    setSlots(parsedSlots)
+
+    if (import.meta.env.DEV) {
+      console.info('[slots][client-booking] response ok', {
+        ...requestPayload,
+        totalSlots: parsedSlots.length,
+      })
+    }
+
     setSlotsLoading(false)
   }
 
@@ -112,10 +148,11 @@ export function ClientBarbershopBookingPage() {
       const metaPhone = typeof userMeta.phone === 'string' ? userMeta.phone : null
       const profileName = clientGlobalProfile?.name || metaName || user.email?.split('@')[0] || 'Cliente'
       const profilePhone = clientGlobalProfile?.phone || metaPhone || null
+      const normalizedProfilePhone = normalizePhone(profilePhone || '')
       const { data: newClientId, error: registerError } = await supabase.rpc('register_client', {
         p_shop_id: shop.id,
         p_name: profileName,
-        p_phone: profilePhone,
+        p_phone: normalizedProfilePhone || null,
         p_email: user.email || null,
       })
 
@@ -128,34 +165,28 @@ export function ClientBarbershopBookingPage() {
       await refreshUserData()
     }
 
-    const { data: appointment, error: appointmentError } = await supabase
-      .from('appointments')
-      .insert({
-        shop_id: shop.id,
-        client_id: clientId,
-        professional_id: selectedProfessional.id,
-        start_at: selectedSlot.slot_start,
-        end_at: selectedSlot.slot_end,
-        status: 'pending',
-      })
-      .select('id')
-      .single()
-
-    if (appointmentError || !appointment) {
-      setBookingError(translateError(appointmentError?.message || 'Não foi possível criar o agendamento.'))
-      setBookingLoading(false)
-      return
-    }
-
-    const { error: serviceError } = await supabase.from('appointment_services').insert({
-      appointment_id: appointment.id,
-      service_id: selectedService.id,
-      duration_minutes: selectedService.duration_minutes,
-      price: selectedService.price,
+    const { error: appointmentError } = await supabase.rpc('create_appointment_safe', {
+      p_shop_id: shop.id,
+      p_client_id: clientId,
+      p_professional_id: selectedProfessional.id,
+      p_start_at: selectedSlot.slot_start,
+      p_service_ids: [selectedService.id],
+      p_notes: null,
     })
 
-    if (serviceError) {
-      setBookingError(translateError(serviceError.message))
+    if (appointmentError) {
+      const lowerMessage = appointmentError.message.toLowerCase()
+      const isUnavailable =
+        lowerMessage.includes('horario indisponivel') ||
+        lowerMessage.includes('appointments_no_overlap') ||
+        lowerMessage.includes('conflito')
+
+      if (isUnavailable) {
+        setBookingError('Este horário acabou de ser reservado. Escolha outro.')
+        await loadSlots({ date: selectedDate, professional: selectedProfessional, service: selectedService })
+      } else {
+        setBookingError(translateError(appointmentError.message || 'Não foi possível criar o agendamento.'))
+      }
       setBookingLoading(false)
       return
     }
@@ -164,7 +195,24 @@ export function ClientBarbershopBookingPage() {
     setBookingLoading(false)
   }
 
-  const canLoadSlots = useMemo(() => !!selectedService && !!selectedProfessional, [selectedService, selectedProfessional])
+  const hasProfessionals = professionals.length > 0
+  const hasServices = services.length > 0
+  const canLoadSlots = useMemo(
+    () => !!selectedService && !!selectedProfessional && hasProfessionals,
+    [selectedService, selectedProfessional, hasProfessionals]
+  )
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    console.info('[slots][client-booking] selection state', {
+      shopId: shop?.id || null,
+      professionalId: selectedProfessional?.id || null,
+      serviceId: selectedService?.id || null,
+      date: format(selectedDate, 'yyyy-MM-dd'),
+      timezone: shop?.timezone || 'America/Sao_Paulo',
+      canLoadSlots,
+    })
+  }, [shop?.id, shop?.timezone, selectedProfessional?.id, selectedService?.id, selectedDate, canLoadSlots])
 
   useEffect(() => {
     if (!selectedService || !selectedProfessional) return
@@ -192,7 +240,7 @@ export function ClientBarbershopBookingPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 px-4 py-4 sm:px-5 md:px-0 md:py-0">
       <Link to="/cliente/barbearias" className="inline-flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
         <ChevronLeft size={16} />
         Voltar para barbearias
@@ -217,47 +265,61 @@ export function ClientBarbershopBookingPage() {
         </div>
       </div>
 
+      <ShopLocationMap shop={shop} />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <h2 className="mb-3 text-base font-semibold text-[var(--color-text)]">1. Serviço</h2>
-          <div className="space-y-2">
-            {services.map((service) => (
-              <button
-                key={service.id}
-                onClick={() => setSelectedService(service)}
-                className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
-                  selectedService?.id === service.id
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                    : 'border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
-                }`}
-              >
-                <p className="font-medium">{service.name}</p>
-                <p className="text-xs text-[var(--color-text-muted)]">{service.duration_minutes} min · R$ {Number(service.price).toFixed(2)}</p>
-              </button>
-            ))}
-          </div>
+          {!hasServices ? (
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Esta barbearia não possui serviços ativos. Solicite ao estabelecimento para configurar o catálogo.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {services.map((service) => (
+                <button
+                  key={service.id}
+                  onClick={() => setSelectedService(service)}
+                  className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
+                    selectedService?.id === service.id
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                  }`}
+                >
+                  <p className="font-medium">{service.name}</p>
+                  <p className="text-xs text-[var(--color-text-muted)]">{service.duration_minutes} min · R$ {Number(service.price).toFixed(2)}</p>
+                </button>
+              ))}
+            </div>
+          )}
         </Card>
 
         <Card>
           <h2 className="mb-3 text-base font-semibold text-[var(--color-text)]">2. Profissional</h2>
-          <div className="space-y-2">
-            {professionals.map((professional) => (
-              <button
-                key={professional.id}
-                onClick={() => setSelectedProfessional(professional)}
-                className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
-                  selectedProfessional?.id === professional.id
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                    : 'border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
-                }`}
-              >
-                <p className="inline-flex items-center gap-1.5 font-medium">
-                  <UserRound size={14} />
-                  {professional.name}
-                </p>
-              </button>
-            ))}
-          </div>
+          {!hasProfessionals ? (
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Esta barbearia está sem profissionais ativos. Tente outra barbearia ou volte mais tarde.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {professionals.map((professional) => (
+                <button
+                  key={professional.id}
+                  onClick={() => setSelectedProfessional(professional)}
+                  className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
+                    selectedProfessional?.id === professional.id
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                  }`}
+                >
+                  <p className="inline-flex items-center gap-1.5 font-medium">
+                    <UserRound size={14} />
+                    {professional.name}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
 
@@ -276,22 +338,43 @@ export function ClientBarbershopBookingPage() {
             4. Horário disponível
           </h2>
 
-          {!canLoadSlots && (
+          {!selectedService && (
             <p className="text-sm text-[var(--color-text-muted)]">Selecione serviço e profissional para ver horários.</p>
+          )}
+          {selectedService && !hasProfessionals && (
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Não há profissionais disponíveis para gerar horários nesta barbearia.
+            </p>
+          )}
+          {selectedService && hasProfessionals && !selectedProfessional && (
+            <p className="text-sm text-[var(--color-text-muted)]">Selecione um profissional para carregar os horários.</p>
           )}
 
           {canLoadSlots && slotsLoading && (
-            <div className="flex items-center justify-center py-8">
-              <div className="h-7 w-7 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
+            <div className="grid grid-cols-2 gap-2 py-2 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <div
+                  key={`slot-skeleton-${index}`}
+                  className="h-10 animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)]"
+                />
+              ))}
             </div>
           )}
 
-          {canLoadSlots && !slotsLoading && slots.length === 0 && (
-            <p className="text-sm text-[var(--color-text-muted)]">Nenhum horário disponível nesta data.</p>
+          {canLoadSlots && !slotsLoading && slotsError && (
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+              {slotsError}
+            </div>
+          )}
+
+          {canLoadSlots && !slotsLoading && !slotsError && slots.length === 0 && (
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Nenhum horário disponível para esta data. Tente outra data.
+            </p>
           )}
 
           {canLoadSlots && !slotsLoading && slots.length > 0 && (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {slots.map((slot) => {
                 const selected = selectedSlot?.slot_start === slot.slot_start
                 return (
@@ -315,6 +398,9 @@ export function ClientBarbershopBookingPage() {
 
       <Card>
         <h2 className="mb-3 text-base font-semibold text-[var(--color-text)]">Confirmar agendamento</h2>
+        {selectedService && (
+          <p className="mb-3 text-sm text-[var(--color-text-muted)]">Duração: {selectedService.duration_minutes} min</p>
+        )}
         {bookingError && <p className="mb-3 rounded-lg bg-[var(--color-primary-soft)] px-3 py-2 text-sm text-[var(--color-text)]">{bookingError}</p>}
         {bookingSuccess && <p className="mb-3 rounded-lg bg-emerald-500/15 px-3 py-2 text-sm text-emerald-200">Agendamento realizado com sucesso.</p>}
 

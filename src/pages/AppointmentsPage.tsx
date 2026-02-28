@@ -20,7 +20,6 @@ import {
   subWeeks,
   isSameDay,
   parseISO,
-  addMinutes,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { Tables } from '../types/database'
@@ -147,27 +146,24 @@ export function AppointmentsPage() {
 
     setFormLoading(true)
 
-    const selectedServices = services.filter((s) => formServiceIds.includes(s.id))
-    const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration_minutes, 0)
     const startAt = new Date(`${formDate}T${formTime}:00`)
-    const endAt = addMinutes(startAt, totalDuration)
 
-    const { data: apt, error: aptError } = await supabase
-      .from('appointments')
-      .insert({
-        shop_id: currentShop.id,
-        client_id: formClientId,
-        professional_id: formProfessionalId,
-        start_at: startAt.toISOString(),
-        end_at: endAt.toISOString(),
-        notes: formNotes || null,
-        status: 'pending',
-      })
-      .select()
-      .single()
+    const { error: aptError } = await supabase.rpc('create_appointment_safe', {
+      p_shop_id: currentShop.id,
+      p_client_id: formClientId,
+      p_professional_id: formProfessionalId,
+      p_start_at: startAt.toISOString(),
+      p_service_ids: formServiceIds,
+      p_notes: formNotes || null,
+    })
 
     if (aptError) {
-      if (aptError.message.includes('appointments_no_overlap')) {
+      const lowerMessage = aptError.message.toLowerCase()
+      if (
+        lowerMessage.includes('appointments_no_overlap') ||
+        lowerMessage.includes('horario indisponivel') ||
+        lowerMessage.includes('conflito')
+      ) {
         setFormError('Conflito de horário! Este profissional já tem um agendamento nesse período.')
       } else {
         setFormError(translateError(aptError.message))
@@ -175,15 +171,6 @@ export function AppointmentsPage() {
       setFormLoading(false)
       return
     }
-
-    const aptServices = selectedServices.map((s) => ({
-      appointment_id: apt.id,
-      service_id: s.id,
-      duration_minutes: s.duration_minutes,
-      price: s.price,
-    }))
-
-    await supabase.from('appointment_services').insert(aptServices)
 
     setFormLoading(false)
     setModalOpen(false)

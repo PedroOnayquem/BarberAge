@@ -64,6 +64,32 @@ body {
   background-image: none;
 }
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.avatar-skeleton {
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--color-surface-muted) 92%, transparent) 8%,
+    color-mix(in srgb, var(--color-bg-elevated) 65%, transparent) 18%,
+    color-mix(in srgb, var(--color-surface-muted) 92%, transparent) 33%
+  );
+  background-size: 220% 100%;
+  animation: avatar-shimmer 1.15s linear infinite;
+}
+
+@keyframes avatar-shimmer {
+  to {
+    background-position-x: -220%;
+  }
+}
+
 .auth-premium-bg {
   background-color: #0d0d0f;
   background-image:
@@ -271,11 +297,9 @@ body {
 }
 
 .barber-timepicker-popover {
-  position: absolute;
-  z-index: 60;
-  top: calc(100% + 0.5rem);
-  left: 0;
-  width: min(100%, 360px);
+  position: fixed;
+  z-index: 9999;
+  width: min(360px, calc(100vw - 24px));
 }
 
 .barber-timepicker {
@@ -299,7 +323,7 @@ body {
 .barber-timepicker-grid {
   display: grid;
   gap: 0.5rem;
-  max-height: 260px;
+  max-height: min(320px, calc(100vh - 180px));
   overflow-y: auto;
   padding-right: 0.125rem;
 }
@@ -309,7 +333,8 @@ body {
   border-radius: 10px;
   border: 1px solid var(--color-border);
   background: var(--color-bg-elevated);
-  padding: 0.35rem 0.5rem;
+  padding: 0.45rem 0.5rem;
+  line-height: 1.2;
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text);
@@ -327,6 +352,11 @@ body {
   color: #ffffff;
 }
 
+.barber-timepicker-slot.is-highlighted:not(.is-selected) {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-muted);
+}
+
 .barber-timepicker-slot:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
   outline-offset: 2px;
@@ -338,4 +368,124 @@ body {
 
 .outlined-field:focus-within .outlined-field-label {
   color: var(--color-accent);
+}
+
+.outlined-field-control,
+.outlined-field-control:hover,
+.outlined-field-control:focus,
+.outlined-field-control:active,
+.outlined-field-control:valid,
+.outlined-field-control:not(:placeholder-shown) {
+  background-color: var(--color-input-bg);
+  color: var(--color-text);
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-text) !important;
+  caret-color: var(--color-text);
+  transition: background-color 9999s ease-in-out 0s;
+  -webkit-box-shadow: 0 0 0 1000px var(--color-input-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--color-input-bg) inset !important;
+  border-color: var(--color-border-strong) !important;
+}
+
+input:-moz-autofill,
+textarea:-moz-autofill,
+select:-moz-autofill {
+  box-shadow: 0 0 0 1000px var(--color-input-bg) inset !important;
+  color: var(--color-text) !important;
+  caret-color: var(--color-text);
+}
+
+.shop-location-marker {
+  background: transparent;
+  border: 0;
+}
+
+.shop-location-marker-dot {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  border: 3px solid var(--color-accent);
+  box-shadow: 0 8px 18px rgba(10, 31, 68, 0.24);
+}
+
+.shop-location-marker-dot::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 2px;
+  height: 9px;
+  background: var(--color-accent);
+  transform: translateX(-50%);
+}
+
+.user-location-arrow-marker {
+  background: transparent;
+  border: 0;
+}
+
+.user-location-arrow {
+  position: relative;
+  display: block;
+  width: 28px;
+  height: 28px;
+  transform-origin: 50% 50%;
+  transition: transform 0.22s ease;
+}
+
+.user-location-arrow::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-bottom: 18px solid #38bdf8;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 4px 10px rgba(56, 189, 248, 0.45));
+}
+
+.user-location-arrow::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 11px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: #ffffff;
+  border: 2px solid #0284c7;
+}
+
+.shop-location-inline-map .leaflet-container,
+.directions-map-modal .leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #0b1220;
+}
+
+.directions-map-modal .leaflet-control-container {
+  z-index: 3;
+}
+
+.directions-map-modal .leaflet-pane,
+.directions-map-modal .leaflet-map-pane,
+.directions-map-modal .leaflet-tile-pane {
+  z-index: 1;
 }

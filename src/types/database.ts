@@ -323,40 +323,64 @@ export type Database = {
       shops: {
         Row: {
           address: string | null
+          address_number: string | null
+          address_street: string | null
           avatar_url: string | null
+          buffer_minutes: number
           city: string | null
+          complement: string | null
+          cep: string | null
           created_at: string
           id: string
+          latitude: number | null
+          longitude: number | null
           name: string
           neighborhood: string | null
           phone: string | null
           slug: string
+          slot_interval_minutes: number
           state: string | null
           timezone: string
         }
         Insert: {
           address?: string | null
+          address_number?: string | null
+          address_street?: string | null
           avatar_url?: string | null
+          buffer_minutes?: number
           city?: string | null
+          complement?: string | null
+          cep?: string | null
           created_at?: string
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name: string
           neighborhood?: string | null
           phone?: string | null
           slug: string
+          slot_interval_minutes?: number
           state?: string | null
           timezone?: string
         }
         Update: {
           address?: string | null
+          address_number?: string | null
+          address_street?: string | null
           avatar_url?: string | null
+          buffer_minutes?: number
           city?: string | null
+          complement?: string | null
+          cep?: string | null
           created_at?: string
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name?: string
           neighborhood?: string | null
           phone?: string | null
           slug?: string
+          slot_interval_minutes?: number
           state?: string | null
           timezone?: string
         }
@@ -365,40 +389,64 @@ export type Database = {
       barbershops: {
         Row: {
           address: string | null
+          address_number: string | null
+          address_street: string | null
           avatar_url: string | null
+          buffer_minutes: number
           city: string | null
+          complement: string | null
+          cep: string | null
           created_at: string
           id: string
+          latitude: number | null
+          longitude: number | null
           name: string
           neighborhood: string | null
           phone: string | null
           slug: string
+          slot_interval_minutes: number
           state: string | null
           timezone: string
         }
         Insert: {
           address?: string | null
+          address_number?: string | null
+          address_street?: string | null
           avatar_url?: string | null
+          buffer_minutes?: number
           city?: string | null
+          complement?: string | null
+          cep?: string | null
           created_at?: string
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name: string
           neighborhood?: string | null
           phone?: string | null
           slug: string
+          slot_interval_minutes?: number
           state?: string | null
           timezone?: string
         }
         Update: {
           address?: string | null
+          address_number?: string | null
+          address_street?: string | null
           avatar_url?: string | null
+          buffer_minutes?: number
           city?: string | null
+          complement?: string | null
+          cep?: string | null
           created_at?: string
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name?: string
           neighborhood?: string | null
           phone?: string | null
           slug?: string
+          slot_interval_minutes?: number
           state?: string | null
           timezone?: string
         }
@@ -506,6 +554,23 @@ export type Database = {
           p_duration_minutes: number
         }
         Returns: { slot_start: string; slot_end: string }[]
+      }
+      create_appointment_safe: {
+        Args: {
+          p_shop_id: string
+          p_client_id: string
+          p_professional_id: string
+          p_start_at: string
+          p_service_ids: string[]
+          p_notes?: string | null
+        }
+        Returns: {
+          appointment_id: string
+          start_at: string
+          end_at: string
+          duration_minutes: number
+          buffer_minutes: number
+        }[]
       }
       list_public_barbershops_with_status: {
         Args: Record<PropertyKey, never>
