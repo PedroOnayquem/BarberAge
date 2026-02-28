@@ -7,7 +7,9 @@ import { getInAppBrowserDetection, isInAppBrowser as detectInAppBrowser } from '
 import 'leaflet/dist/leaflet.css'
 
 type LatLngTuple = [number, number]
-type PermissionState = 'checking' | 'prompt' | 'granted' | 'denied' | 'unsupported' | 'insecure' | 'in_app'
+type LocationStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'timeout' | 'unavailable' | 'insecure' | 'in_app'
+type RouteStatus = 'idle' | 'loading' | 'ok' | 'error'
+type PermissionSnapshot = 'unknown' | 'prompt' | 'granted' | 'denied'
 
 interface LatLngObject {
   lat: number
@@ -27,12 +29,26 @@ interface GeolocationErrorDetails {
   message: string
 }
 
+type GeolocationResult =
+  | { ok: true; coords: GeolocationCoordinates }
+  | { ok: false; code: number | null; message: string; reason: 'denied' | 'timeout' | 'unavailable' }
+
 const ROUTE_RECALC_DISTANCE_METERS = 30
 const FOLLOW_FLY_INTERVAL_MS = 1200
+const GEO_REQUEST_TIMEOUT_MS = 12000
+const WATCH_STALE_TIMEOUT_MS = 20000
+const IP_FALLBACK_TIMEOUT_MS = 4000
+const ROUTE_REQUEST_TIMEOUT_MS = 12000
 const GEO_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
-  timeout: 12000,
+  timeout: GEO_REQUEST_TIMEOUT_MS,
   maximumAge: 0,
+}
+
+const WATCH_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 10000,
+  maximumAge: 2000,
 }
 
 const GEO_ERROR_CODE_PERMISSION_DENIED = 1
@@ -118,6 +134,11 @@ function isIOSDevice(userAgent: string) {
   return /iphone|ipad|ipod/i.test(userAgent)
 }
 
+function isSafariBrowser(userAgent: string) {
+  const ua = userAgent.toLowerCase()
+  return ua.includes('safari') && !ua.includes('chrome') && !ua.includes('crios') && !ua.includes('fxios')
+}
+
 function getLocationErrorMessage(errorCode: number | null) {
   if (errorCode === GEO_ERROR_CODE_PERMISSION_DENIED) {
     return 'Permissao negada. Ative a localizacao nas configuracoes do navegador para continuar.'
@@ -134,6 +155,75 @@ function getLocationErrorMessage(errorCode: number | null) {
 function formatTimestamp(value: number | null) {
   if (!value) return '--'
   return new Date(value).toLocaleTimeString()
+}
+
+function mapGeolocationError(code: number | null, message: string): GeolocationResult {
+  if (code === GEO_ERROR_CODE_PERMISSION_DENIED) {
+    return { ok: false, reason: 'denied', code, message }
+  }
+  if (code === GEO_ERROR_CODE_TIMEOUT) {
+    return { ok: false, reason: 'timeout', code, message }
+  }
+  return { ok: false, reason: 'unavailable', code, message }
+}
+
+function getCurrentPositionWithTimeout(timeoutMs: number): Promise<GeolocationResult> {
+  if (!navigator.geolocation) {
+    return Promise.resolve({
+      ok: false,
+      reason: 'unavailable',
+      code: null,
+      message: 'Geolocation API not supported',
+    })
+  }
+
+  return new Promise((resolve) => {
+    let settled = false
+    const hardTimeout = window.setTimeout(() => {
+      if (settled) return
+      settled = true
+      resolve({
+        ok: false,
+        reason: 'timeout',
+        code: GEO_ERROR_CODE_TIMEOUT,
+        message: 'Timeout 12s',
+      })
+    }, timeoutMs)
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(hardTimeout)
+        resolve({ ok: true, coords: position.coords })
+      },
+      (error) => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(hardTimeout)
+        resolve(mapGeolocationError(error?.code ?? null, error?.message || 'Unknown geolocation error'))
+      },
+      { ...GEO_OPTIONS, timeout: timeoutMs }
+    )
+  })
+}
+
+async function getApproximateLocationByIP(timeoutMs: number) {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch('https://ipapi.co/json/', { signal: controller.signal })
+    if (!response.ok) return null
+    const payload = (await response.json()) as { latitude?: number; longitude?: number }
+    const lat = Number(payload.latitude)
+    const lng = Number(payload.longitude)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+    return { lat, lng }
+  } catch {
+    return null
+  } finally {
+    window.clearTimeout(timer)
+  }
 }
 
 function MapRuntimeEffects({
@@ -186,7 +276,8 @@ export function DirectionsMapModal({
   shopAddress,
   shopCoords,
 }: DirectionsMapModalProps) {
-  const [permissionState, setPermissionState] = useState<PermissionState>('checking')
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle')
+  const [routeStatus, setRouteStatus] = useState<RouteStatus>('idle')
   const [userCoords, setUserCoords] = useState<LatLngObject | null>(null)
   const [routeOriginCoords, setRouteOriginCoords] = useState<LatLngObject | null>(null)
   const [userBearing, setUserBearing] = useState(0)
@@ -194,8 +285,7 @@ export function DirectionsMapModal({
   const [routePoints, setRoutePoints] = useState<LatLngTuple[]>([])
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null)
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null)
-  const [loadingRoute, setLoadingRoute] = useState(false)
-  const [loadingLocation, setLoadingLocation] = useState(false)
+  const [usingApproximateLocation, setUsingApproximateLocation] = useState(false)
   const [routeError, setRouteError] = useState('')
   const [locationError, setLocationError] = useState<GeolocationErrorDetails | null>(null)
   const [mapReady, setMapReady] = useState(false)
@@ -205,58 +295,46 @@ export function DirectionsMapModal({
   const [mapWasMoved, setMapWasMoved] = useState(false)
   const [devSimulationEnabled, setDevSimulationEnabled] = useState(false)
   const [permissionApiState, setPermissionApiState] = useState<'available' | 'unavailable'>('unavailable')
+  const [permissionSnapshot, setPermissionSnapshot] = useState<PermissionSnapshot>('unknown')
   const [lastRequestAt, setLastRequestAt] = useState<number | null>(null)
 
   const mapRef = useRef<LeafletMap | null>(null)
   const watchIdRef = useRef<number | null>(null)
+  const watchStaleTimerRef = useRef<number | null>(null)
   const permissionStatusRef = useRef<PermissionStatus | null>(null)
   const openSessionRef = useRef(0)
   const prevGpsRef = useRef<LatLngObject | null>(null)
   const lastRouteOriginRef = useRef<LatLngObject | null>(null)
   const lastFlyAtRef = useRef(0)
   const followUserRef = useRef(true)
+  const userCoordsRef = useRef<LatLngObject | null>(null)
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : ''
   const inAppDetection = useMemo(() => getInAppBrowserDetection(userAgent), [userAgent])
   const isInAppBrowser = useMemo(() => detectInAppBrowser(userAgent), [userAgent])
+  const isSafari = useMemo(() => isSafariBrowser(userAgent), [userAgent])
 
   function logGeoEvent(event: string, payload?: Record<string, unknown>) {
     if (!import.meta.env.DEV) return
     console.info(`[directions][geolocation] ${event}`, payload || {})
   }
 
-  function handleLocationFailure(error: GeolocationPositionError, source: 'getCurrentPosition' | 'watchPosition') {
-    const errorCode = typeof error.code === 'number' ? error.code : null
-    const errorMessage = error.message || ''
-    const friendlyMessage = getLocationErrorMessage(errorCode)
-
-    setLocationError({ code: errorCode, message: errorMessage })
-    setLoadingLocation(false)
-    setPermissionMessage(friendlyMessage)
-
-    if (errorCode === GEO_ERROR_CODE_PERMISSION_DENIED) {
-      setPermissionState('denied')
-      if (source === 'watchPosition') {
-        clearLocationWatch()
-      }
-    } else {
-      setPermissionState('prompt')
-    }
-
-    logGeoEvent('error', {
-      source,
-      code: errorCode,
-      message: errorMessage,
-      protocol: window.location.protocol,
-      origin: window.location.origin,
-      secureContext: isSecureGeolocationContext(),
-    })
-  }
-
   useEffect(() => {
     followUserRef.current = isFollowingUser
   }, [isFollowingUser])
 
+  useEffect(() => {
+    userCoordsRef.current = userCoords
+  }, [userCoords])
+
+  function clearWatchStaleTimeout() {
+    if (watchStaleTimerRef.current !== null) {
+      window.clearTimeout(watchStaleTimerRef.current)
+      watchStaleTimerRef.current = null
+    }
+  }
+
   function clearLocationWatch() {
+    clearWatchStaleTimeout()
     if (watchIdRef.current === null || !navigator.geolocation) return
     navigator.geolocation.clearWatch(watchIdRef.current)
     watchIdRef.current = null
@@ -267,6 +345,26 @@ export function DirectionsMapModal({
       permissionStatusRef.current.onchange = null
       permissionStatusRef.current = null
     }
+  }
+
+  function scheduleWatchStaleTimeout(openSession: number) {
+    clearWatchStaleTimeout()
+    watchStaleTimerRef.current = window.setTimeout(() => {
+      if (openSessionRef.current !== openSession) return
+      clearLocationWatch()
+      setPermissionMessage('Sem atualizacao recente do GPS. Mantendo ultima posicao conhecida.')
+      if (!userCoordsRef.current) {
+        setLocationStatus('timeout')
+      }
+      logGeoEvent('watch-stale-timeout', { openSession })
+    }, WATCH_STALE_TIMEOUT_MS)
+  }
+
+  function getDeniedMessage() {
+    if (isIOSDevice(userAgent)) {
+      return 'Permissao negada no iOS. Ajustes > Privacidade e Seguranca > Servicos de Localizacao > Safari Sites (ou Ajustes > Safari > Localizacao).'
+    }
+    return 'Permissao negada. Ative a localizacao nas configuracoes do navegador para continuar.'
   }
 
   function updateUserFromPosition(coords: GeolocationCoordinates) {
@@ -280,9 +378,10 @@ export function DirectionsMapModal({
     const hasHeading =
       typeof coords.heading === 'number' && Number.isFinite(coords.heading) && coords.heading >= 0
 
-    setLoadingLocation(false)
+    setLocationStatus('granted')
     setPermissionMessage('')
     setLocationError(null)
+    setUsingApproximateLocation(false)
     setUserCoords(nextCoords)
 
     if (hasHeading) {
@@ -320,35 +419,67 @@ export function DirectionsMapModal({
     if (!navigator.geolocation) return
 
     clearLocationWatch()
+    scheduleWatchStaleTimeout(openSession)
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         if (openSessionRef.current !== openSession) return
+        scheduleWatchStaleTimeout(openSession)
         updateUserFromPosition(position.coords)
       },
       (error) => {
         if (openSessionRef.current !== openSession) return
-        handleLocationFailure(error, 'watchPosition')
+        const errorCode = typeof error.code === 'number' ? error.code : null
+        const errorMessage = error.message || ''
+        const friendlyMessage = getLocationErrorMessage(errorCode)
+
+        setLocationError({ code: errorCode, message: errorMessage })
+        setPermissionMessage(friendlyMessage)
+
+        if (errorCode === GEO_ERROR_CODE_PERMISSION_DENIED) {
+          setLocationStatus('denied')
+          setPermissionMessage(getDeniedMessage())
+          clearLocationWatch()
+          return
+        }
+
+        if (!userCoordsRef.current) {
+          setLocationStatus(errorCode === GEO_ERROR_CODE_TIMEOUT ? 'timeout' : 'unavailable')
+        } else {
+          setLocationStatus('granted')
+        }
       },
-      GEO_OPTIONS
+      WATCH_OPTIONS
     )
 
     watchIdRef.current = watchId
   }
 
-  function startLocationRequest(source: 'click' | 'retry' | 'permission-change' | 'manual-refresh') {
+  async function attemptIpFallback(openSession: number) {
+    const approximate = await getApproximateLocationByIP(IP_FALLBACK_TIMEOUT_MS)
+    if (openSessionRef.current !== openSession || !approximate) return
+    setUserCoords(approximate)
+    setRouteOriginCoords(approximate)
+    setLocationStatus('granted')
+    setPermissionMessage('Usando localizacao aproximada por IP.')
+    setUsingApproximateLocation(true)
+    setLocationError(null)
+    prevGpsRef.current = approximate
+    lastRouteOriginRef.current = approximate
+  }
+
+  async function startLocationRequest(source: 'click' | 'retry' | 'permission-change' | 'manual-refresh') {
     if (!open || !shopCoords) return
 
     if (!navigator.geolocation) {
-      setPermissionState('denied')
+      setLocationStatus('unavailable')
       setPermissionMessage('Geolocalizacao nao suportada neste navegador.')
       setLocationError({ code: null, message: 'Geolocation API not supported' })
-      setLoadingLocation(false)
       return
     }
 
     const openSession = openSessionRef.current
-    setLoadingLocation(true)
+    setLocationStatus('requesting')
     setPermissionMessage('')
     setRouteError('')
     setLocationError(null)
@@ -360,44 +491,61 @@ export function DirectionsMapModal({
       secureContext: isSecureGeolocationContext(),
     })
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (openSessionRef.current !== openSession) return
-        setPermissionState('granted')
-        updateUserFromPosition(position.coords)
-        startWatchPosition(openSession)
-      },
-      (error) => {
-        if (openSessionRef.current !== openSession) return
-        handleLocationFailure(error, 'getCurrentPosition')
-      },
-      GEO_OPTIONS
-    )
+    const result = await getCurrentPositionWithTimeout(GEO_REQUEST_TIMEOUT_MS)
+    if (openSessionRef.current !== openSession) return
+
+    if (result.ok) {
+      updateUserFromPosition(result.coords)
+      startWatchPosition(openSession)
+      return
+    }
+
+    setLocationError({ code: result.code, message: result.message })
+
+    if (result.reason === 'denied') {
+      setLocationStatus('denied')
+      setPermissionMessage(getDeniedMessage())
+      clearLocationWatch()
+      return
+    }
+
+    if (result.reason === 'timeout') {
+      setLocationStatus('timeout')
+      setPermissionMessage('Tempo esgotado (12s) para obter localizacao. Tente novamente.')
+      clearLocationWatch()
+      void attemptIpFallback(openSession)
+      return
+    }
+
+    setLocationStatus('unavailable')
+    setPermissionMessage('GPS indisponivel no momento. Verifique sinal/localizacao e tente novamente.')
+    clearLocationWatch()
+    void attemptIpFallback(openSession)
   }
 
   async function syncPermissionState(options?: { source?: string }) {
     if (!navigator.permissions?.query) {
       setPermissionApiState('unavailable')
-      setPermissionState('unsupported')
+      setPermissionSnapshot('unknown')
       logGeoEvent('permission-api-unavailable', { source: options?.source || 'unknown' })
-      return 'unsupported' as PermissionState
+      return 'unknown' as PermissionSnapshot
     }
 
     setPermissionApiState('available')
     try {
-      const permissionStatus = await navigator.permissions.query({ name: 'geolocation' })
+      const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
       permissionStatusRef.current = permissionStatus
-      const nextState = permissionStatus.state as PermissionState
-      setPermissionState(nextState)
+      const nextState = permissionStatus.state as PermissionSnapshot
+      setPermissionSnapshot(nextState)
 
       permissionStatus.onchange = () => {
-        const currentState = permissionStatus.state as PermissionState
-        setPermissionState(currentState)
+        const currentState = permissionStatus.state as PermissionSnapshot
+        setPermissionSnapshot(currentState)
         logGeoEvent('permission-state-changed', { state: currentState })
-        if (currentState === 'granted' && open && !isInAppBrowser) {
+        if (currentState === 'granted' && open && !isInAppBrowser && locationStatus !== 'requesting') {
           setPermissionMessage('Permissao habilitada. Buscando sua localizacao...')
           setLocationError(null)
-          startLocationRequest('permission-change')
+          void startLocationRequest('permission-change')
         }
       }
 
@@ -408,12 +556,12 @@ export function DirectionsMapModal({
       return nextState
     } catch (error) {
       setPermissionApiState('unavailable')
-      setPermissionState('unsupported')
+      setPermissionSnapshot('unknown')
       logGeoEvent('permission-query-failed', {
         source: options?.source || 'unknown',
         error: String(error || ''),
       })
-      return 'unsupported' as PermissionState
+      return 'unknown' as PermissionSnapshot
     }
   }
 
@@ -432,22 +580,20 @@ export function DirectionsMapModal({
     })
 
     if (isInAppBrowser) {
-      setPermissionState('in_app')
+      setLocationStatus('in_app')
       setPermissionMessage('Para usar localizacao em tempo real, abra no Safari/Chrome (o navegador embutido bloqueia permissao).')
       setLocationError({ code: GEO_ERROR_CODE_PERMISSION_DENIED, message: 'Blocked by in-app browser/WebView' })
-      setLoadingLocation(false)
       return
     }
 
     if (!isSecureGeolocationContext()) {
-      setPermissionState('insecure')
+      setLocationStatus('insecure')
       setPermissionMessage('Geolocalizacao exige HTTPS no celular. Abra o app em https:// para permitir localizacao.')
       setLocationError({ code: null, message: 'Insecure context (HTTP)' })
-      setLoadingLocation(false)
       return
     }
 
-    startLocationRequest('click')
+    void startLocationRequest('click')
     void syncPermissionState({ source: 'request-click' })
   }
 
@@ -456,7 +602,7 @@ export function DirectionsMapModal({
     if (nextState === 'granted') {
       setPermissionMessage('Permissao habilitada. Buscando sua localizacao...')
       setLocationError(null)
-      startLocationRequest('manual-refresh')
+      void startLocationRequest('manual-refresh')
     }
   }
 
@@ -484,7 +630,10 @@ export function DirectionsMapModal({
     lastRouteOriginRef.current = null
     lastFlyAtRef.current = 0
     setMapReady(false)
-    setPermissionState('checking')
+    setLocationStatus('idle')
+    setRouteStatus('idle')
+    setPermissionApiState('unavailable')
+    setPermissionSnapshot('unknown')
     setUserCoords(null)
     setRouteOriginCoords(null)
     setUserBearing(0)
@@ -494,6 +643,7 @@ export function DirectionsMapModal({
     setDurationSeconds(null)
     setRouteError('')
     setLocationError(null)
+    setUsingApproximateLocation(false)
     setLastRequestAt(null)
     setMapWasMoved(false)
     setIsFollowingUser(true)
@@ -508,18 +658,23 @@ export function DirectionsMapModal({
     })
 
     if (!shopCoords) {
-      setPermissionState('denied')
+      setLocationStatus('unavailable')
       setPermissionMessage('Localizacao ainda nao configurada para esta barbearia.')
     } else if (isInAppBrowser) {
-      setPermissionState('in_app')
+      setLocationStatus('in_app')
       setPermissionMessage('Para usar localizacao em tempo real, abra no Safari/Chrome (o navegador embutido bloqueia permissao).')
       setLocationError({ code: GEO_ERROR_CODE_PERMISSION_DENIED, message: 'Blocked by in-app browser/WebView' })
     } else if (!isSecureGeolocationContext()) {
-      setPermissionState('insecure')
+      setLocationStatus('insecure')
       setPermissionMessage('Geolocalizacao exige HTTPS no celular. Abra o app em https:// para permitir localizacao.')
       setLocationError({ code: null, message: 'Insecure context (HTTP)' })
     } else {
-      void syncPermissionState({ source: 'modal-open' })
+      void syncPermissionState({ source: 'modal-open' }).then((snapshot) => {
+        if (snapshot === 'denied') {
+          setLocationStatus('denied')
+          setPermissionMessage(getDeniedMessage())
+        }
+      })
     }
 
     return () => {
@@ -531,16 +686,26 @@ export function DirectionsMapModal({
   }, [open, shopCoords?.lat, shopCoords?.lng, isInAppBrowser, inAppDetection.source])
 
   useEffect(() => {
-    if (!open || !shopCoords || !routeOriginCoords) return
+    if (!open || !shopCoords || !routeOriginCoords) {
+      if (open) {
+        setRouteStatus('idle')
+      }
+      return
+    }
     if (import.meta.env.DEV && devSimulationEnabled) return
 
     const openSession = openSessionRef.current
     const controller = new AbortController()
+    let didRouteTimeout = false
+    const routeTimeout = window.setTimeout(() => {
+      didRouteTimeout = true
+      controller.abort()
+    }, ROUTE_REQUEST_TIMEOUT_MS)
     const origin = routeOriginCoords
     const destination = shopCoords
 
     async function fetchRoute() {
-      setLoadingRoute(true)
+      setRouteStatus('loading')
       setRouteError('')
 
       const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`
@@ -573,18 +738,27 @@ export function DirectionsMapModal({
         setRoutePoints(parsedPoints)
         setDistanceMeters(typeof route.distance === 'number' ? route.distance : null)
         setDurationSeconds(typeof route.duration === 'number' ? route.duration : null)
+        setRouteStatus('ok')
       } catch {
-        if (controller.signal.aborted || openSessionRef.current !== openSession) return
-        setRouteError('Nao foi possivel calcular a rota agora.')
-      } finally {
-        if (!controller.signal.aborted && openSessionRef.current === openSession) {
-          setLoadingRoute(false)
+        if (openSessionRef.current !== openSession) return
+        if (controller.signal.aborted && !didRouteTimeout) return
+        if (didRouteTimeout) {
+          setRouteError('Tempo esgotado para calcular a rota. Tente novamente.')
+          setRouteStatus('error')
+          return
         }
+        setRouteError('Nao foi possivel calcular a rota agora.')
+        setRouteStatus('error')
+      } finally {
+        window.clearTimeout(routeTimeout)
       }
     }
 
     void fetchRoute()
-    return () => controller.abort()
+    return () => {
+      window.clearTimeout(routeTimeout)
+      controller.abort()
+    }
   }, [
     open,
     shopCoords?.lat,
@@ -599,6 +773,7 @@ export function DirectionsMapModal({
     if (!open || !devSimulationEnabled || routePoints.length < 2) return
 
     setPermissionMessage('Modo simulacao ativo (dev).')
+    setLocationStatus('granted')
 
     let stepIndex = 0
     const maxIndex = routePoints.length - 1
@@ -711,14 +886,18 @@ export function DirectionsMapModal({
       'radial-gradient(120% 120% at 50% 0%, rgba(15, 23, 42, 0.95) 0%, rgba(2, 6, 23, 1) 70%)',
   }
 
-  const showPermissionPrompt =
-    !userCoords && !loadingLocation && (permissionState === 'prompt' || permissionState === 'unsupported')
-  const showDeniedFallback = !userCoords && !loadingLocation && permissionState === 'denied'
-  const showInAppBlocked = !userCoords && !loadingLocation && permissionState === 'in_app'
-  const showInsecureContext = !userCoords && !loadingLocation && permissionState === 'insecure'
-  const showPermissionChecking = !userCoords && permissionState === 'checking'
-  const locationStatusMessage =
-    permissionMessage || (!userCoords && loadingLocation ? 'Localizando...' : '')
+  const loadingLocation = locationStatus === 'requesting'
+  const loadingRoute = routeStatus === 'loading'
+  const showPermissionPrompt = !userCoords && !loadingLocation && locationStatus === 'idle'
+  const showDeniedFallback = !userCoords && !loadingLocation && (
+    locationStatus === 'denied' ||
+    locationStatus === 'timeout' ||
+    locationStatus === 'unavailable'
+  )
+  const showInAppBlocked = !userCoords && !loadingLocation && locationStatus === 'in_app'
+  const showInsecureContext = !userCoords && !loadingLocation && locationStatus === 'insecure'
+  const showPermissionChecking = false
+  const locationStatusMessage = permissionMessage || (!userCoords && loadingLocation ? 'Localizando...' : '')
   const showInAppWarning = !userCoords && isInAppBrowser
   const inAppOpenHint = isIOSDevice(userAgent)
     ? 'iPhone: toque em (...) e escolha "Abrir no Safari".'
@@ -727,8 +906,10 @@ export function DirectionsMapModal({
     ? [
         `ua=${userAgent}`,
         `inApp=${isInAppBrowser ? 'yes' : 'no'}${inAppDetection.source ? `(${inAppDetection.source})` : ''}`,
-        `permission=${permissionState}`,
+        `locationStatus=${locationStatus}`,
+        `routeStatus=${routeStatus}`,
         `permissionsApi=${permissionApiState}`,
+        `permissionSnapshot=${permissionSnapshot}`,
         `secureContext=${window.isSecureContext ? 'yes' : 'no'}`,
         `protocol=${window.location.protocol}`,
         `origin=${window.location.origin}`,
@@ -813,7 +994,7 @@ export function DirectionsMapModal({
                 <div className="absolute inset-0 z-[4] flex items-center justify-center bg-slate-900/35 backdrop-blur-[1px]">
                   <div className="flex items-center gap-3 rounded-xl border border-white/20 bg-slate-900/85 px-4 py-3 text-sm font-medium text-slate-100 shadow-[0_8px_28px_rgba(2,6,23,0.4)] backdrop-blur">
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
-                    Localizando...
+                    {loadingLocation ? 'Buscando localizacao...' : 'Calculando rota...'}
                   </div>
                 </div>
               )}
@@ -963,9 +1144,19 @@ export function DirectionsMapModal({
 
             {showDeniedFallback && (
               <div className="space-y-3">
-                <h3 className="text-lg font-semibold text-slate-50">Permissao de localizacao negada</h3>
+                <h3 className="text-lg font-semibold text-slate-50">
+                  {locationStatus === 'timeout'
+                    ? 'Tempo esgotado ao obter localizacao'
+                    : locationStatus === 'unavailable'
+                    ? 'Localizacao indisponivel'
+                    : 'Permissao de localizacao negada'}
+                </h3>
                 <p className="text-sm text-slate-300">
-                  Ative a localizacao para ver a rota em tempo real ate a barbearia.
+                  {locationStatus === 'timeout'
+                    ? 'Nao foi possivel concluir em ate 12 segundos.'
+                    : locationStatus === 'unavailable'
+                    ? 'GPS indisponivel no momento. Verifique sinal/localizacao do aparelho.'
+                    : 'Ative a localizacao para ver a rota em tempo real ate a barbearia.'}
                 </p>
                 {permissionMessage && <p className="text-xs text-slate-300">{permissionMessage}</p>}
                 {showInAppWarning && (
@@ -983,7 +1174,10 @@ export function DirectionsMapModal({
                 <div className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-[11px] text-slate-300">
                   <p>Como habilitar:</p>
                   <p>Chrome Android: cadeado do site &gt; Permissoes &gt; Localizacao &gt; Permitir.</p>
-                  <p>iOS Safari: Ajustes do iPhone &gt; Safari &gt; Localizacao (ou permissao do site) &gt; Permitir.</p>
+                  <p>iOS Safari: Ajustes &gt; Privacidade e Seguranca &gt; Servicos de Localizacao &gt; Safari Sites.</p>
+                  {isSafari && isIOSDevice(userAgent) && (
+                    <p>Safari iOS pode manter o bloqueio ate fechar/reabrir a pagina apos liberar a permissao.</p>
+                  )}
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
@@ -1049,6 +1243,9 @@ export function DirectionsMapModal({
                 {routeError && (
                   <p className="mt-2 text-xs text-slate-300">{routeError}</p>
                 )}
+                {usingApproximateLocation && (
+                  <p className="mt-2 text-xs text-amber-200">Usando localizacao aproximada por IP.</p>
+                )}
                 {locationError && (
                   <p className="mt-2 text-[11px] text-slate-400">
                     Erro geolocalizacao {locationError.code ?? '-'}: {locationError.message || 'sem detalhe'}
@@ -1056,7 +1253,7 @@ export function DirectionsMapModal({
                 )}
                 {import.meta.env.DEV && !!debugInfo && <p className="mt-2 break-all text-[11px] text-slate-400">{debugInfo}</p>}
 
-                {!userCoords && permissionState === 'granted' && (
+                {!userCoords && !loadingLocation && (
                   <button
                     onClick={handleRequestLocation}
                     className="mt-3 w-full rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-400"
