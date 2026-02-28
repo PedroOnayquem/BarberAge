@@ -6,7 +6,7 @@ import { divIcon, latLngBounds, type Map as LeafletMap } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
 type LatLngTuple = [number, number]
-type PermissionState = 'checking' | 'prompt' | 'granted' | 'denied' | 'unsupported'
+type PermissionState = 'checking' | 'prompt' | 'granted' | 'denied' | 'unsupported' | 'insecure'
 
 interface LatLngObject {
   lat: number
@@ -21,6 +21,11 @@ interface DirectionsMapModalProps {
   shopCoords: LatLngObject | null
 }
 
+interface GeolocationErrorDetails {
+  code: number | null
+  message: string
+}
+
 const ROUTE_RECALC_DISTANCE_METERS = 30
 const FOLLOW_FLY_INTERVAL_MS = 1200
 const GEO_OPTIONS: PositionOptions = {
@@ -28,6 +33,10 @@ const GEO_OPTIONS: PositionOptions = {
   timeout: 10000,
   maximumAge: 0,
 }
+
+const GEO_ERROR_CODE_PERMISSION_DENIED = 1
+const GEO_ERROR_CODE_POSITION_UNAVAILABLE = 2
+const GEO_ERROR_CODE_TIMEOUT = 3
 
 const shopMarkerIcon = divIcon({
   className: 'shop-location-marker',
@@ -97,6 +106,26 @@ function openExternal(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
+function isSecureGeolocationContext() {
+  if (typeof window === 'undefined') return true
+  if (window.isSecureContext) return true
+  const host = window.location.hostname
+  return host === 'localhost' || host === '127.0.0.1'
+}
+
+function getLocationErrorMessage(errorCode: number | null) {
+  if (errorCode === GEO_ERROR_CODE_PERMISSION_DENIED) {
+    return 'Permissao negada. Ative a localizacao nas configuracoes do navegador para continuar.'
+  }
+  if (errorCode === GEO_ERROR_CODE_POSITION_UNAVAILABLE) {
+    return 'GPS indisponivel no momento. Verifique sinal/localizacao do aparelho e tente novamente.'
+  }
+  if (errorCode === GEO_ERROR_CODE_TIMEOUT) {
+    return 'Tempo esgotado ao buscar localizacao. Tente novamente.'
+  }
+  return 'Nao foi possivel obter sua localizacao agora.'
+}
+
 function MapRuntimeEffects({
   points,
   autoFit,
@@ -158,12 +187,14 @@ export function DirectionsMapModal({
   const [loadingRoute, setLoadingRoute] = useState(false)
   const [loadingLocation, setLoadingLocation] = useState(false)
   const [routeError, setRouteError] = useState('')
+  const [locationError, setLocationError] = useState<GeolocationErrorDetails | null>(null)
   const [mapReady, setMapReady] = useState(false)
   const [mapRenderKey, setMapRenderKey] = useState(0)
   const [tileVariant, setTileVariant] = useState<'osm' | 'carto'>('osm')
   const [isFollowingUser, setIsFollowingUser] = useState(true)
   const [mapWasMoved, setMapWasMoved] = useState(false)
   const [devSimulationEnabled, setDevSimulationEnabled] = useState(false)
+  const [runtimeInfo, setRuntimeInfo] = useState('')
 
   const mapRef = useRef<LeafletMap | null>(null)
   const watchIdRef = useRef<number | null>(null)
@@ -173,6 +204,38 @@ export function DirectionsMapModal({
   const lastRouteOriginRef = useRef<LatLngObject | null>(null)
   const lastFlyAtRef = useRef(0)
   const followUserRef = useRef(true)
+
+  function logGeoEvent(event: string, payload?: Record<string, unknown>) {
+    console.info(`[directions][geolocation] ${event}`, payload || {})
+  }
+
+  function handleLocationFailure(error: GeolocationPositionError, source: 'getCurrentPosition' | 'watchPosition') {
+    const errorCode = typeof error.code === 'number' ? error.code : null
+    const errorMessage = error.message || ''
+    const friendlyMessage = getLocationErrorMessage(errorCode)
+
+    setLocationError({ code: errorCode, message: errorMessage })
+    setLoadingLocation(false)
+    setPermissionMessage(friendlyMessage)
+
+    if (errorCode === GEO_ERROR_CODE_PERMISSION_DENIED) {
+      setPermissionState('denied')
+      if (source === 'watchPosition') {
+        clearLocationWatch()
+      }
+    } else {
+      setPermissionState('prompt')
+    }
+
+    logGeoEvent('error', {
+      source,
+      code: errorCode,
+      message: errorMessage,
+      protocol: window.location.protocol,
+      origin: window.location.origin,
+      secureContext: isSecureGeolocationContext(),
+    })
+  }
 
   useEffect(() => {
     followUserRef.current = isFollowingUser
@@ -204,6 +267,7 @@ export function DirectionsMapModal({
 
     setLoadingLocation(false)
     setPermissionMessage('')
+    setLocationError(null)
     setUserCoords(nextCoords)
 
     if (hasHeading) {
@@ -249,15 +313,7 @@ export function DirectionsMapModal({
       },
       (error) => {
         if (openSessionRef.current !== openSession) return
-
-        if (error.code === error.PERMISSION_DENIED) {
-          clearLocationWatch()
-          setPermissionState('denied')
-          setLoadingLocation(false)
-          setPermissionMessage('Permissao negada. Voce pode tentar novamente.')
-        } else {
-          setPermissionMessage('Nao foi possivel atualizar sua localizacao em tempo real.')
-        }
+        handleLocationFailure(error, 'watchPosition')
       },
       GEO_OPTIONS
     )
@@ -268,9 +324,24 @@ export function DirectionsMapModal({
   function requestPreciseLocation() {
     if (!open || !shopCoords) return
 
+    logGeoEvent('request-location-click', {
+      protocol: window.location.protocol,
+      origin: window.location.origin,
+      secureContext: isSecureGeolocationContext(),
+    })
+
+    if (!isSecureGeolocationContext()) {
+      setPermissionState('insecure')
+      setPermissionMessage('Geolocalizacao exige HTTPS no celular. Abra o app em https:// para permitir localizacao.')
+      setLocationError({ code: null, message: 'Insecure context (HTTP)' })
+      setLoadingLocation(false)
+      return
+    }
+
     if (!navigator.geolocation) {
       setPermissionState('denied')
       setPermissionMessage('Geolocalizacao nao suportada neste navegador.')
+      setLocationError({ code: null, message: 'Geolocation API not supported' })
       return
     }
 
@@ -278,6 +349,7 @@ export function DirectionsMapModal({
     setLoadingLocation(true)
     setPermissionMessage('')
     setRouteError('')
+    setLocationError(null)
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -288,18 +360,7 @@ export function DirectionsMapModal({
       },
       (error) => {
         if (openSessionRef.current !== openSession) return
-
-        setLoadingLocation(false)
-        if (error.code === error.PERMISSION_DENIED) {
-          setPermissionState('denied')
-          setPermissionMessage('Permissao negada. Ative a localizacao para tracar a rota.')
-        } else if (error.code === error.TIMEOUT) {
-          setPermissionState('prompt')
-          setPermissionMessage('Nao foi possivel obter sua localizacao a tempo. Tente novamente.')
-        } else {
-          setPermissionState('prompt')
-          setPermissionMessage('Nao foi possivel obter sua localizacao agora.')
-        }
+        handleLocationFailure(error, 'getCurrentPosition')
       },
       GEO_OPTIONS
     )
@@ -333,13 +394,27 @@ export function DirectionsMapModal({
     setDistanceMeters(null)
     setDurationSeconds(null)
     setRouteError('')
+    setLocationError(null)
     setMapWasMoved(false)
     setIsFollowingUser(true)
     setDevSimulationEnabled(false)
 
+    const debugInfo = `origin=${window.location.origin} protocol=${window.location.protocol} secure=${isSecureGeolocationContext() ? 'yes' : 'no'}`
+    setRuntimeInfo(debugInfo)
+    logGeoEvent('modal-open', {
+      origin: window.location.origin,
+      protocol: window.location.protocol,
+      secureContext: isSecureGeolocationContext(),
+      shopHasCoords: Boolean(shopCoords),
+    })
+
     if (!shopCoords) {
       setPermissionState('denied')
       setPermissionMessage('Localizacao ainda nao configurada para esta barbearia.')
+    } else if (!isSecureGeolocationContext()) {
+      setPermissionState('insecure')
+      setPermissionMessage('Geolocalizacao exige HTTPS no celular. Abra o app em https:// para permitir localizacao.')
+      setLocationError({ code: null, message: 'Insecure context (HTTP)' })
     }
 
     return () => {
@@ -352,9 +427,15 @@ export function DirectionsMapModal({
 
   useEffect(() => {
     if (!open || !shopCoords) return
+    if (!isSecureGeolocationContext()) {
+      setPermissionState('insecure')
+      setPermissionMessage('Geolocalizacao exige HTTPS no celular. Abra o app em https:// para permitir localizacao.')
+      return
+    }
     if (!navigator.geolocation) {
       setPermissionState('denied')
       setPermissionMessage('Geolocalizacao nao suportada neste navegador.')
+      setLocationError({ code: null, message: 'Geolocation API not supported' })
       return
     }
 
@@ -373,11 +454,21 @@ export function DirectionsMapModal({
         permissionStatusRef.current = permissionStatus
         const currentState = permissionStatus.state as PermissionState
         setPermissionState(currentState)
+        logGeoEvent('permission-state', {
+          state: currentState,
+          origin: window.location.origin,
+          protocol: window.location.protocol,
+        })
 
         permissionStatus.onchange = () => {
           if (openSessionRef.current !== openSession) return
           const nextState = permissionStatus.state as PermissionState
           setPermissionState(nextState)
+          logGeoEvent('permission-state-changed', {
+            state: nextState,
+            origin: window.location.origin,
+            protocol: window.location.protocol,
+          })
           if (nextState === 'granted') {
             requestPreciseLocation()
           }
@@ -389,6 +480,7 @@ export function DirectionsMapModal({
       } catch {
         if (openSessionRef.current !== openSession) return
         setPermissionState('unsupported')
+        logGeoEvent('permission-api-unsupported')
       }
     }
 
@@ -579,6 +671,7 @@ export function DirectionsMapModal({
   const showPermissionPrompt =
     !userCoords && !loadingLocation && (permissionState === 'prompt' || permissionState === 'unsupported')
   const showDeniedFallback = !userCoords && !loadingLocation && permissionState === 'denied'
+  const showInsecureContext = !userCoords && !loadingLocation && permissionState === 'insecure'
   const showPermissionChecking = !userCoords && permissionState === 'checking'
   const locationStatusMessage =
     permissionMessage || (!userCoords && loadingLocation ? 'Localizando...' : '')
@@ -706,6 +799,7 @@ export function DirectionsMapModal({
                   Precisamos da sua localizacao para tracar o caminho ate a barbearia.
                 </p>
                 {permissionMessage && <p className="text-xs text-slate-300">{permissionMessage}</p>}
+                {!!runtimeInfo && <p className="text-[11px] text-slate-400">{runtimeInfo}</p>}
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
                     onClick={requestPreciseLocation}
@@ -723,6 +817,32 @@ export function DirectionsMapModal({
               </div>
             )}
 
+            {showInsecureContext && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-slate-50">Localizacao indisponivel neste link</h3>
+                <p className="text-sm text-slate-300">
+                  No celular, a geolocalizacao precisa de HTTPS. Abra o app em uma URL segura para permitir rota em tempo real.
+                </p>
+                {permissionMessage && <p className="text-xs text-slate-300">{permissionMessage}</p>}
+                {!!runtimeInfo && <p className="text-[11px] text-slate-400">{runtimeInfo}</p>}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    onClick={() => openExternal(googleMapsUrl)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-400"
+                  >
+                    <Navigation size={16} />
+                    Abrir no Google Maps
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/10"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            )}
+
             {showDeniedFallback && (
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold text-slate-50">Permissao de localizacao negada</h3>
@@ -730,6 +850,17 @@ export function DirectionsMapModal({
                   Ative a localizacao para ver a rota em tempo real ate a barbearia.
                 </p>
                 {permissionMessage && <p className="text-xs text-slate-300">{permissionMessage}</p>}
+                {!!runtimeInfo && <p className="text-[11px] text-slate-400">{runtimeInfo}</p>}
+                {locationError && (
+                  <p className="text-[11px] text-slate-400">
+                    Erro {locationError.code ?? '-'}: {locationError.message || 'sem detalhe'}
+                  </p>
+                )}
+                <div className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-[11px] text-slate-300">
+                  <p>Como habilitar:</p>
+                  <p>Chrome Android: cadeado do site &gt; Permissoes &gt; Localizacao &gt; Permitir.</p>
+                  <p>iOS Safari: Ajustes do iPhone &gt; Safari &gt; Localizacao (ou permissao do site) &gt; Permitir.</p>
+                </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
                     onClick={() => openExternal(googleMapsUrl)}
@@ -748,7 +879,7 @@ export function DirectionsMapModal({
               </div>
             )}
 
-            {!showPermissionChecking && !showPermissionPrompt && !showDeniedFallback && (
+            {!showPermissionChecking && !showPermissionPrompt && !showDeniedFallback && !showInsecureContext && (
               <>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-300">Rota</p>
                 <h3 className="mt-1 text-lg font-bold text-slate-50">{shopName}</h3>
@@ -770,6 +901,14 @@ export function DirectionsMapModal({
                 )}
                 {routeError && (
                   <p className="mt-2 text-xs text-slate-300">{routeError}</p>
+                )}
+                {locationError && (
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    Erro geolocalizacao {locationError.code ?? '-'}: {locationError.message || 'sem detalhe'}
+                  </p>
+                )}
+                {!!runtimeInfo && (
+                  <p className="mt-2 text-[11px] text-slate-400">{runtimeInfo}</p>
                 )}
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
