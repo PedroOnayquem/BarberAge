@@ -480,6 +480,25 @@ select:-moz-autofill {
   background: #0b1220;
 }
 
+.shop-location-inline-map {
+  position: relative;
+  z-index: 0;
+}
+
+.shop-location-inline-map .leaflet-container {
+  position: relative;
+  z-index: 0;
+  touch-action: pan-y;
+}
+
+.shop-location-inline-map .leaflet-pane,
+.shop-location-inline-map .leaflet-map-pane,
+.shop-location-inline-map .leaflet-tile-pane,
+.shop-location-inline-map .leaflet-marker-pane,
+.shop-location-inline-map .leaflet-shadow-pane {
+  z-index: 1;
+}
+
 .directions-map-modal .leaflet-control-container {
   z-index: 3;
 }

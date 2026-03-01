@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink, Navigation } from 'lucide-react'
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import { MapContainer, Marker, TileLayer, useMap } from 'react-leaflet'
 import { divIcon } from 'leaflet'
 import { supabase } from '../../../lib/supabase'
 import { buildAddressSignature, buildReadableAddress, hasMinimumAddressForGeocoding, normalizeCep } from '../../../lib/location'
@@ -34,6 +34,25 @@ const markerIcon = divIcon({
   iconSize: [24, 24],
   iconAnchor: [12, 24],
 })
+
+function InlineMapRuntimeEffects() {
+  const map = useMap()
+
+  useEffect(() => {
+    map.invalidateSize()
+    const frame = window.requestAnimationFrame(() => map.invalidateSize())
+
+    const handleResize = () => map.invalidateSize()
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [map])
+
+  return null
+}
 
 function parseCoordinate(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -215,24 +234,31 @@ export function ShopLocationMap({ shop }: ShopLocationMapProps) {
       <h2 className="mb-3 text-base font-semibold text-[var(--color-text)]">Localização</h2>
 
       {showInlineMap ? (
-        <div className="overflow-hidden rounded-xl border border-[var(--color-border)]">
+        <div className="relative h-52 overflow-hidden rounded-xl border border-[var(--color-border)] sm:h-56">
           <MapContainer
             key={`inline-map-${shop.id}`}
             center={[coords!.lat, coords!.lng]}
             zoom={16}
+            dragging={false}
+            touchZoom={false}
+            doubleClickZoom={false}
+            boxZoom={false}
+            keyboard={false}
             scrollWheelZoom={false}
             zoomControl={false}
             attributionControl={false}
-            className="shop-location-inline-map h-56 w-full sm:h-64"
+            className="shop-location-inline-map pointer-events-none h-full w-full"
           >
             <TileLayer
               attribution='&copy; OpenStreetMap contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <Marker position={[coords!.lat, coords!.lng]} icon={markerIcon}>
-              <Popup>{shop.name}</Popup>
-            </Marker>
+            <Marker position={[coords!.lat, coords!.lng]} icon={markerIcon} />
+            <InlineMapRuntimeEffects />
           </MapContainer>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/30 via-transparent to-transparent px-3 py-2 text-[11px] font-medium text-white/85">
+            Prévia do mapa
+          </div>
         </div>
       ) : coords ? (
         <div className="flex h-64 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-6 text-center text-sm text-[var(--color-text-muted)]">

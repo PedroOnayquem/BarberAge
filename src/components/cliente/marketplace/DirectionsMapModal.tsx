@@ -242,11 +242,13 @@ function MapRuntimeEffects({
   useEffect(() => {
     onMapReady(map)
     map.invalidateSize()
+    const animationFrame = window.requestAnimationFrame(() => map.invalidateSize())
     const resizeTimer = window.setTimeout(() => map.invalidateSize(), 150)
     const handleDragStart = () => onMapInteraction()
     map.on('dragstart', handleDragStart)
 
     return () => {
+      window.cancelAnimationFrame(animationFrame)
       window.clearTimeout(resizeTimer)
       map.off('dragstart', handleDragStart)
     }
