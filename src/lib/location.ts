@@ -91,3 +91,54 @@ export function hasMinimumAddressForGeocoding(fields: LocationFields) {
     (fields.state || '').trim()
   )
 }
+
+export interface NormalizedCoordinates {
+  latitude: number
+  longitude: number
+  wasSwapped: boolean
+}
+
+export function parseCoordinateNumber(value: unknown) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.')
+    if (!normalized) return null
+    const parsed = Number(normalized)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+export function isLatitudeInRange(value: number) {
+  return value >= -90 && value <= 90
+}
+
+export function isLongitudeInRange(value: number) {
+  return value >= -180 && value <= 180
+}
+
+export function normalizeAndRepairCoordinates(
+  latitudeLike: unknown,
+  longitudeLike: unknown
+): NormalizedCoordinates | null {
+  const latitude = parseCoordinateNumber(latitudeLike)
+  const longitude = parseCoordinateNumber(longitudeLike)
+  if (latitude === null || longitude === null) return null
+
+  if (latitude === 0 && longitude === 0) return null
+
+  const latitudeIsValid = isLatitudeInRange(latitude)
+  const longitudeIsValid = isLongitudeInRange(longitude)
+  if (latitudeIsValid && longitudeIsValid) {
+    return { latitude, longitude, wasSwapped: false }
+  }
+
+  const canSwap = isLatitudeInRange(longitude) && isLongitudeInRange(latitude)
+  if (canSwap) {
+    return { latitude: longitude, longitude: latitude, wasSwapped: true }
+  }
+
+  return null
+}

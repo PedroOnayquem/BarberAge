@@ -4,6 +4,7 @@ import { ExternalLink, Layers3, LocateFixed, Navigation, X } from 'lucide-react'
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet'
 import { divIcon, latLngBounds, type Map as LeafletMap } from 'leaflet'
 import { getInAppBrowserDetection, isInAppBrowser as detectInAppBrowser } from '../../../lib/inAppBrowser'
+import { normalizeAndRepairCoordinates } from '../../../lib/location'
 import 'leaflet/dist/leaflet.css'
 
 type LatLngTuple = [number, number]
@@ -19,8 +20,10 @@ interface LatLngObject {
 interface DirectionsMapModalProps {
   open: boolean
   onClose: () => void
+  shopId: string
   shopName: string
   shopAddress: string
+  shopFormattedAddress?: string | null
   shopCoords: LatLngObject | null
 }
 
@@ -215,10 +218,9 @@ async function getApproximateLocationByIP(timeoutMs: number) {
     const response = await fetch('https://ipapi.co/json/', { signal: controller.signal })
     if (!response.ok) return null
     const payload = (await response.json()) as { latitude?: number; longitude?: number }
-    const lat = Number(payload.latitude)
-    const lng = Number(payload.longitude)
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
-    return { lat, lng }
+    const normalized = normalizeAndRepairCoordinates(payload.latitude, payload.longitude)
+    if (!normalized) return null
+    return { lat: normalized.latitude, lng: normalized.longitude }
   } catch {
     return null
   } finally {
@@ -274,8 +276,10 @@ function MapRuntimeEffects({
 export function DirectionsMapModal({
   open,
   onClose,
+  shopId,
   shopName,
   shopAddress,
+  shopFormattedAddress,
   shopCoords,
 }: DirectionsMapModalProps) {
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle')
@@ -370,9 +374,27 @@ export function DirectionsMapModal({
   }
 
   function updateUserFromPosition(coords: GeolocationCoordinates) {
+    const normalized = normalizeAndRepairCoordinates(coords.latitude, coords.longitude)
+    if (!normalized) {
+      logGeoEvent('ignore-invalid-origin', {
+        shopId,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+      })
+      return
+    }
+
+    if (normalized.wasSwapped) {
+      logGeoEvent('origin-latlng-swapped', {
+        shopId,
+        before: { latitude: coords.latitude, longitude: coords.longitude },
+        after: { lat: normalized.latitude, lng: normalized.longitude },
+      })
+    }
+
     const nextCoords = {
-      lat: coords.latitude,
-      lng: coords.longitude,
+      lat: normalized.latitude,
+      lng: normalized.longitude,
     }
 
     const previousCoords = prevGpsRef.current
@@ -385,6 +407,11 @@ export function DirectionsMapModal({
     setLocationError(null)
     setUsingApproximateLocation(false)
     setUserCoords(nextCoords)
+    logGeoEvent('origin-updated', {
+      shopId,
+      lat: nextCoords.lat,
+      lng: nextCoords.lng,
+    })
 
     if (hasHeading) {
       setUserBearing(coords.heading as number)
@@ -657,6 +684,10 @@ export function DirectionsMapModal({
       isInAppBrowser,
       inAppSource: inAppDetection.source || '',
       shopHasCoords: Boolean(shopCoords),
+      shopId,
+      lat: shopCoords?.lat ?? null,
+      lng: shopCoords?.lng ?? null,
+      formatted_address: (shopFormattedAddress || shopAddress || '').trim() || null,
     })
 
     if (!shopCoords) {
@@ -685,7 +716,7 @@ export function DirectionsMapModal({
       clearLocationWatch()
       clearPermissionListener()
     }
-  }, [open, shopCoords?.lat, shopCoords?.lng, isInAppBrowser, inAppDetection.source])
+  }, [open, shopId, shopAddress, shopFormattedAddress, shopCoords?.lat, shopCoords?.lng, isInAppBrowser, inAppDetection.source])
 
   useEffect(() => {
     if (!open || !shopCoords || !routeOriginCoords) {
@@ -890,17 +921,19 @@ export function DirectionsMapModal({
 
   const loadingLocation = locationStatus === 'requesting'
   const loadingRoute = routeStatus === 'loading'
-  const showPermissionPrompt = !userCoords && !loadingLocation && locationStatus === 'idle'
-  const showDeniedFallback = !userCoords && !loadingLocation && (
+  const shopLocationConfigured = Boolean(shopCoords)
+  const showShopLocationNotConfigured = !shopLocationConfigured
+  const showPermissionPrompt = shopLocationConfigured && !userCoords && !loadingLocation && locationStatus === 'idle'
+  const showDeniedFallback = shopLocationConfigured && !userCoords && !loadingLocation && (
     locationStatus === 'denied' ||
     locationStatus === 'timeout' ||
     locationStatus === 'unavailable'
   )
-  const showInAppBlocked = !userCoords && !loadingLocation && locationStatus === 'in_app'
-  const showInsecureContext = !userCoords && !loadingLocation && locationStatus === 'insecure'
+  const showInAppBlocked = shopLocationConfigured && !userCoords && !loadingLocation && locationStatus === 'in_app'
+  const showInsecureContext = shopLocationConfigured && !userCoords && !loadingLocation && locationStatus === 'insecure'
   const showPermissionChecking = false
   const locationStatusMessage = permissionMessage || (!userCoords && loadingLocation ? 'Localizando...' : '')
-  const showInAppWarning = !userCoords && isInAppBrowser
+  const showInAppWarning = shopLocationConfigured && !userCoords && isInAppBrowser
   const inAppOpenHint = isIOSDevice(userAgent)
     ? 'iPhone: toque em (...) e escolha "Abrir no Safari".'
     : 'Android: toque em ⋮ e escolha "Abrir no Chrome".'
@@ -915,6 +948,10 @@ export function DirectionsMapModal({
         `secureContext=${window.isSecureContext ? 'yes' : 'no'}`,
         `protocol=${window.location.protocol}`,
         `origin=${window.location.origin}`,
+        `shopId=${shopId}`,
+        `destLat=${shopCoords?.lat ?? '-'}`,
+        `destLng=${shopCoords?.lng ?? '-'}`,
+        `formattedAddress=${(shopFormattedAddress || shopAddress || '').trim() || '-'}`,
         `lastClick=${formatTimestamp(lastRequestAt)}`,
         `errorCode=${locationError?.code ?? '-'}`,
         `errorMessage=${locationError?.message || '-'}`,
@@ -1034,6 +1071,32 @@ export function DirectionsMapModal({
               <div className="space-y-3">
                 <p className="text-sm text-slate-200">Verificando permissao de localizacao...</p>
                 <div className="h-2 w-full animate-pulse rounded-full bg-white/20" />
+              </div>
+            )}
+
+            {showShopLocationNotConfigured && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-slate-50">Localização não configurada</h3>
+                <p className="text-sm text-slate-300">
+                  Esta barbearia ainda não possui latitude/longitude salvas. Não é possível desenhar rota no mapa interno.
+                </p>
+                <p className="text-xs text-slate-300">Você pode abrir no Google Maps usando o endereço cadastrado.</p>
+                {import.meta.env.DEV && !!debugInfo && <p className="break-all text-[11px] text-slate-400">{debugInfo}</p>}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    onClick={() => openExternal(googleMapsUrl)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-400"
+                  >
+                    <Navigation size={16} />
+                    Abrir no Google Maps
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/10"
+                  >
+                    Fechar
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1222,7 +1285,12 @@ export function DirectionsMapModal({
               </div>
             )}
 
-            {!showPermissionChecking && !showPermissionPrompt && !showDeniedFallback && !showInAppBlocked && !showInsecureContext && (
+            {!showShopLocationNotConfigured &&
+              !showPermissionChecking &&
+              !showPermissionPrompt &&
+              !showDeniedFallback &&
+              !showInAppBlocked &&
+              !showInsecureContext && (
               <>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-300">Rota</p>
                 <h3 className="mt-1 text-lg font-bold text-slate-50">{shopName}</h3>

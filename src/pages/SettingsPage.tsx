@@ -14,7 +14,14 @@ import { AvatarCropModal } from '../components/ui/AvatarCropModal'
 import { format, parseISO } from 'date-fns'
 import { translateError } from '../lib/errorMessages'
 import { getSignedAvatarUrl, uploadShopAvatar, validateAvatarFile, SHOP_AVATARS_BUCKET } from '../lib/avatarStorage'
-import { buildAddressLine, buildAddressSignature, formatCep, hasMinimumAddressForGeocoding, normalizeCep } from '../lib/location'
+import {
+  buildAddressLine,
+  buildAddressSignature,
+  formatCep,
+  hasMinimumAddressForGeocoding,
+  normalizeAndRepairCoordinates,
+  normalizeCep,
+} from '../lib/location'
 import { caretIndexFromDigitCount, countDigitsBeforeCaret, formatPhone, normalizePhone } from '../lib/phone'
 import type { Tables } from '../types/database'
 
@@ -202,18 +209,25 @@ function ShopSettings({
     )
   }
 
-  function normalizeCoordinate(value: unknown): number | null {
-    if (value === null || value === undefined) return null
-    if (typeof value === 'number') {
-      return Number.isFinite(value) ? value : null
+  function normalizeCoordinates(latitudeLike: unknown, longitudeLike: unknown, source: string) {
+    const normalized = normalizeAndRepairCoordinates(latitudeLike, longitudeLike)
+    if (!normalized) {
+      return {
+        latitude: null,
+        longitude: null,
+        wasSwapped: false,
+      }
     }
-    if (typeof value === 'string') {
-      const normalized = value.trim().replace(',', '.')
-      if (!normalized) return null
-      const parsed = Number.parseFloat(normalized)
-      return Number.isFinite(parsed) ? parsed : null
+
+    if (normalized.wasSwapped && import.meta.env.DEV) {
+      console.warn('[settings][coords] lat/lng invertidos detectados e corrigidos', {
+        source,
+        before: { latitudeLike, longitudeLike },
+        after: { latitude: normalized.latitude, longitude: normalized.longitude },
+      })
     }
-    return null
+
+    return normalized
   }
 
   function sanitizePayload(payload: Record<string, unknown>) {
@@ -242,8 +256,7 @@ function ShopSettings({
     const rawCity = readText(record.city)
     const rawState = readText(record.state) || readText(record.uf)
     const rawTimezone = readText(record.timezone)
-    const parsedLat = normalizeCoordinate(record.latitude)
-    const parsedLng = normalizeCoordinate(record.longitude)
+    const parsedCoords = normalizeCoordinates(record.latitude, record.longitude, 'shop-record')
     const parsedSlotInterval = Number.parseInt(readText(record.slot_interval_minutes), 10)
     const parsedBuffer = Number.parseInt(readText(record.buffer_minutes), 10)
 
@@ -256,8 +269,8 @@ function ShopSettings({
     setNeighborhood(rawNeighborhood)
     setCity(rawCity)
     setStateCode(rawState.toUpperCase())
-    setLatitude(parsedLat)
-    setLongitude(parsedLng)
+    setLatitude(parsedCoords.latitude)
+    setLongitude(parsedCoords.longitude)
     setTimezone(rawTimezone || 'America/Sao_Paulo')
     setSlotIntervalMinutes(String(Number.isInteger(parsedSlotInterval) ? parsedSlotInterval : 30))
     setBufferMinutes(String(Number.isInteger(parsedBuffer) ? parsedBuffer : 0))
@@ -417,7 +430,12 @@ function ShopSettings({
       return
     }
 
-    if (!normalizedCep || normalizedCep.length !== 8) {
+    if (!normalizedCep || !normalizedNumber) {
+      setSaveError('Informe CEP e número para precisão.')
+      return
+    }
+
+    if (normalizedCep.length !== 8) {
       setSaveError('Informe um CEP válido.')
       return
     }
@@ -460,7 +478,8 @@ function ShopSettings({
       state: normalizedState,
       complement: normalizedComplement,
     })
-    const hasCurrentCoordinates = typeof shop.latitude === 'number' && typeof shop.longitude === 'number'
+    const existingCoords = normalizeCoordinates(shop.latitude, shop.longitude, 'current-shop')
+    const hasCurrentCoordinates = existingCoords.latitude !== null && existingCoords.longitude !== null
     const addressChanged = currentAddressSignature !== nextAddressSignature
     const shouldGeocode =
       hasMinimumAddressForGeocoding({
@@ -477,8 +496,8 @@ function ShopSettings({
     setSaveError('')
     setGeoWarning('')
 
-    const normalizedLatitude = addressChanged ? null : normalizeCoordinate(shop.latitude)
-    const normalizedLongitude = addressChanged ? null : normalizeCoordinate(shop.longitude)
+    const normalizedLatitude = addressChanged ? null : existingCoords.latitude
+    const normalizedLongitude = addressChanged ? null : existingCoords.longitude
     const normalizedTimezone = timezone.trim() || 'America/Sao_Paulo'
 
     const fullPayloadCandidate = {
@@ -636,14 +655,11 @@ function ShopSettings({
       setGeoWarning('Dados salvos em modo compatível. Aplique as migrations novas para CEP/campos separados/mapa.')
     }
 
-    if (updatedShopRecord) {
-      applyShopRecordToForm(updatedShopRecord)
-    } else {
-      applyShopRecordToForm({
-        ...shop,
-        ...payload,
-      } as Partial<Shop> & Record<string, unknown>)
-    }
+    applyShopRecordToForm({
+      ...shop,
+      ...(updatedShopRecord || {}),
+      ...payload,
+    } as Partial<Shop> & Record<string, unknown>)
 
     try {
       if (shouldGeocode && !usedLegacyFallback && !geocodeEndpointUnavailable) {
@@ -656,6 +672,7 @@ function ShopSettings({
             neighborhood: normalizedNeighborhood,
             address_street: normalizedStreet,
             address_number: normalizedNumber,
+            address: addressLine || null,
             complement: normalizedComplement || null,
             persist: true,
           },
@@ -695,11 +712,24 @@ function ShopSettings({
             setGeoWarning('Dados salvos, mas não foi possível atualizar a localização no mapa.')
           }
         } else {
-          const parsedLat = Number((geocodeData as Record<string, unknown>)?.latitude)
-          const parsedLng = Number((geocodeData as Record<string, unknown>)?.longitude)
-          if (Number.isFinite(parsedLat) && Number.isFinite(parsedLng)) {
-            setLatitude(parsedLat)
-            setLongitude(parsedLng)
+          const geocodePayload = (geocodeData || {}) as Record<string, unknown>
+          const parsedCoords = normalizeCoordinates(
+            geocodePayload.latitude,
+            geocodePayload.longitude,
+            'geocode-response'
+          )
+          if (parsedCoords.latitude !== null && parsedCoords.longitude !== null) {
+            setLatitude(parsedCoords.latitude)
+            setLongitude(parsedCoords.longitude)
+            if (import.meta.env.DEV) {
+              console.info('[settings][geocode] resolved destination', {
+                shopId: shop.id,
+                lat: parsedCoords.latitude,
+                lng: parsedCoords.longitude,
+                formatted_address:
+                  typeof geocodePayload.formatted_address === 'string' ? geocodePayload.formatted_address : null,
+              })
+            }
           } else {
             setGeoWarning('Dados salvos, mas a geolocalização retornou coordenadas inválidas.')
           }

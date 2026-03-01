@@ -331,6 +331,10 @@ export type Database = {
           complement: string | null
           cep: string | null
           created_at: string
+          formatted_address: string | null
+          geocoded_at: string | null
+          geocode_precision: string | null
+          geocode_provider: string | null
           id: string
           latitude: number | null
           longitude: number | null
@@ -352,6 +356,10 @@ export type Database = {
           complement?: string | null
           cep?: string | null
           created_at?: string
+          formatted_address?: string | null
+          geocoded_at?: string | null
+          geocode_precision?: string | null
+          geocode_provider?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
@@ -373,6 +381,10 @@ export type Database = {
           complement?: string | null
           cep?: string | null
           created_at?: string
+          formatted_address?: string | null
+          geocoded_at?: string | null
+          geocode_precision?: string | null
+          geocode_provider?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
@@ -397,6 +409,10 @@ export type Database = {
           complement: string | null
           cep: string | null
           created_at: string
+          formatted_address: string | null
+          geocoded_at: string | null
+          geocode_precision: string | null
+          geocode_provider: string | null
           id: string
           latitude: number | null
           longitude: number | null
@@ -418,6 +434,10 @@ export type Database = {
           complement?: string | null
           cep?: string | null
           created_at?: string
+          formatted_address?: string | null
+          geocoded_at?: string | null
+          geocode_precision?: string | null
+          geocode_provider?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
@@ -439,6 +459,10 @@ export type Database = {
           complement?: string | null
           cep?: string | null
           created_at?: string
+          formatted_address?: string | null
+          geocoded_at?: string | null
+          geocode_precision?: string | null
+          geocode_provider?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null

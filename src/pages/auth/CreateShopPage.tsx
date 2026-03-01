@@ -271,6 +271,7 @@ export function CreateShopPage() {
             neighborhood: normalizedNeighborhood,
             address_street: normalizedStreet,
             address_number: normalizedNumber,
+            address: fullAddress || null,
             complement: normalizedComplement || null,
             persist: true,
           },
