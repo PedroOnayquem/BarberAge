@@ -21,9 +21,26 @@ export function LoginPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
-    setLoading(true)
 
     const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail) {
+      setError('Informe seu email')
+      return
+    }
+    if (!password) {
+      setError('Informe sua senha')
+      return
+    }
+
+    setLoading(true)
+
+    // Evita inconsistência quando existe sessão ativa de outro usuário.
+    const { data: sessionData } = await supabase.auth.getSession()
+    const activeEmail = sessionData.session?.user?.email?.trim().toLowerCase() || null
+    if (activeEmail && activeEmail !== normalizedEmail) {
+      await supabase.auth.signOut()
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
     if (error) {
       setError(translateError(error.message))
@@ -38,11 +55,17 @@ export function LoginPage() {
     }
 
     if (mode === 'shop') {
-      const { data: members } = await supabase
+      const { data: members, error: membersError } = await supabase
         .from('shop_members')
         .select('id')
         .eq('user_id', data.user.id)
         .limit(1)
+
+      if (membersError) {
+        setError(translateError(membersError.message || 'Não foi possível validar sua conta de barbearia agora.'))
+        setLoading(false)
+        return
+      }
 
       if (!members || members.length === 0) {
         setError('Esta conta não está vinculada a nenhuma barbearia. Cadastre-se como barbearia primeiro.')
@@ -51,18 +74,24 @@ export function LoginPage() {
         return
       }
 
-      navigate('/app/dashboard')
+      navigate('/app/dashboard', { replace: true })
     } else {
       const userMeta = (data.user.user_metadata || {}) as Record<string, unknown>
       const isClientByMetadata =
         userMeta.role === 'client' || userMeta.account_type === 'client'
 
       if (!isClientByMetadata) {
-        const { data: clientUsers } = await supabase
+        const { data: clientUsers, error: clientUsersError } = await supabase
           .from('client_users')
           .select('id')
           .eq('user_id', data.user.id)
           .limit(1)
+
+        if (clientUsersError) {
+          setError(translateError(clientUsersError.message || 'Não foi possível validar sua conta de cliente agora.'))
+          setLoading(false)
+          return
+        }
 
         if (!clientUsers || clientUsers.length === 0) {
           setError('Esta conta não está cadastrada como cliente. Cadastre-se primeiro.')
@@ -72,7 +101,7 @@ export function LoginPage() {
         }
       }
 
-      navigate('/cliente')
+      navigate('/cliente/barbearias', { replace: true })
     }
 
     setLoading(false)

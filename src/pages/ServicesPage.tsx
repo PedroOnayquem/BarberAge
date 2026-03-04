@@ -90,6 +90,7 @@ export function ServicesPage() {
       name: normalizedName,
       duration_minutes: duration,
       price,
+      active: true,
     }
 
     if (editingService) {
@@ -221,5 +222,4 @@ export function ServicesPage() {
     </div>
   )
 }
-
 

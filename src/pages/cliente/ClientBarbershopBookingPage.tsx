@@ -16,6 +16,8 @@ import type { Tables } from '../../types/database'
 type Shop = Tables<'shops'>
 type Service = Tables<'services'>
 type Professional = Tables<'professionals'>
+type ShopSource = 'shops' | 'barbershops'
+type ShopCandidate = { shop: Shop; source: ShopSource }
 
 type Slot = { slot_start: string; slot_end: string }
 
@@ -28,6 +30,7 @@ export function ClientBarbershopBookingPage() {
   const [services, setServices] = useState<Service[]>([])
   const [professionals, setProfessionals] = useState<Professional[]>([])
   const [loading, setLoading] = useState(true)
+  const [catalogError, setCatalogError] = useState('')
 
   const [selectedService, setSelectedService] = useState<Service | null>(null)
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null)
@@ -42,35 +45,116 @@ export function ClientBarbershopBookingPage() {
   const [bookingSuccess, setBookingSuccess] = useState(false)
 
   useEffect(() => {
-    if (slug) loadPageData(slug)
+    if (slug) void loadPageData(slug)
   }, [slug])
+
+  async function fetchShopCandidatesBySlug(shopSlug: string): Promise<ShopCandidate[]> {
+    const [shopsRes, barbershopsRes] = await Promise.all([
+      supabase
+        .from('shops')
+        .select('*')
+        .eq('slug', shopSlug)
+        .maybeSingle(),
+      supabase
+        .from('barbershops')
+        .select('*')
+        .eq('slug', shopSlug)
+        .maybeSingle(),
+    ])
+
+    const candidates: ShopCandidate[] = []
+    if (shopsRes.data) {
+      candidates.push({ shop: shopsRes.data as Shop, source: 'shops' })
+    }
+    if (barbershopsRes.data) {
+      const barbershop = barbershopsRes.data as Shop
+      if (!candidates.some((candidate) => candidate.shop.id === barbershop.id)) {
+        candidates.push({ shop: barbershop, source: 'barbershops' })
+      }
+    }
+
+    if (candidates.length === 0 && (shopsRes.error || barbershopsRes.error) && import.meta.env.DEV) {
+      console.error('[client-booking-by-slug] shop lookup error', {
+        shopsError: shopsRes.error,
+        barbershopsError: barbershopsRes.error,
+        slug: shopSlug,
+      })
+    }
+
+    return candidates
+  }
+
+  async function loadCatalogForShop(shopId: string) {
+    const [servicesRes, professionalsRes] = await Promise.all([
+      supabase.from('services').select('*').eq('shop_id', shopId).eq('active', true).order('name'),
+      supabase.from('professionals').select('*').eq('shop_id', shopId).eq('active', true).order('name'),
+    ])
+
+    const services = (servicesRes.data || []) as Service[]
+    const professionals = (professionalsRes.data || []) as Professional[]
+
+    return {
+      services,
+      professionals,
+      servicesError: servicesRes.error,
+      professionalsError: professionalsRes.error,
+    }
+  }
+
+  function scoreCatalog(services: Service[], professionals: Professional[]) {
+    return (services.length > 0 ? 1000 : 0) + (professionals.length > 0 ? 100 : 0) + services.length + professionals.length
+  }
 
   async function loadPageData(shopSlug: string) {
     setLoading(true)
     setBookingError('')
     setBookingSuccess(false)
+    setCatalogError('')
 
-    const { data: shopData } = await supabase
-      .from('barbershops')
-      .select('*')
-      .eq('slug', shopSlug)
-      .single()
-
-    if (!shopData) {
+    const candidates = await fetchShopCandidatesBySlug(shopSlug)
+    if (candidates.length === 0) {
       setShop(null)
+      setCatalogError('Não foi possível localizar esta barbearia agora.')
       setLoading(false)
       return
     }
 
-    const [servicesRes, professionalsRes] = await Promise.all([
-      supabase.from('services').select('*').eq('shop_id', shopData.id).eq('active', true).order('name'),
-      supabase.from('professionals').select('*').eq('shop_id', shopData.id).eq('active', true).order('name'),
-    ])
+    let selectedCandidate = candidates[0]
+    let selectedCatalog = await loadCatalogForShop(selectedCandidate.shop.id)
+    let selectedScore = scoreCatalog(selectedCatalog.services, selectedCatalog.professionals)
 
-    setShop(shopData)
-    setServices((servicesRes.data || []) as Service[])
-    setProfessionals((professionalsRes.data || []) as Professional[])
-    const signed = await getSignedAvatarUrl(SHOP_AVATARS_BUCKET, shopData.avatar_url)
+    for (let index = 1; index < candidates.length; index += 1) {
+      const nextCandidate = candidates[index]
+      const nextCatalog = await loadCatalogForShop(nextCandidate.shop.id)
+      const nextScore = scoreCatalog(nextCatalog.services, nextCatalog.professionals)
+      if (nextScore > selectedScore) {
+        selectedCandidate = nextCandidate
+        selectedCatalog = nextCatalog
+        selectedScore = nextScore
+      }
+    }
+
+    if (selectedCatalog.servicesError || selectedCatalog.professionalsError) {
+      setCatalogError('Não foi possível carregar serviços e profissionais desta barbearia agora.')
+      if (import.meta.env.DEV) {
+        console.error('[client-booking-by-slug] catalog load error', {
+          servicesError: selectedCatalog.servicesError,
+          professionalsError: selectedCatalog.professionalsError,
+          shopId: selectedCandidate.shop.id,
+          source: selectedCandidate.source,
+        })
+      }
+    } else if (selectedCandidate.source === 'barbershops' && import.meta.env.DEV) {
+      console.info('[client-booking-by-slug] using barbershops fallback source', {
+        slug: shopSlug,
+        shopId: selectedCandidate.shop.id,
+      })
+    }
+
+    setShop(selectedCandidate.shop)
+    setServices(selectedCatalog.services)
+    setProfessionals(selectedCatalog.professionals)
+    const signed = await getSignedAvatarUrl(SHOP_AVATARS_BUCKET, selectedCandidate.shop.avatar_url)
     setAvatarUrl(signed)
     setLoading(false)
   }
@@ -240,13 +324,19 @@ export function ClientBarbershopBookingPage() {
   }
 
   return (
-    <div className="space-y-4 px-4 py-4 sm:px-5 md:px-0 md:py-0">
-      <Link to="/cliente/barbearias" className="inline-flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-        <ChevronLeft size={16} />
-        Voltar para barbearias
-      </Link>
+      <div className="space-y-4 px-4 py-4 sm:px-5 md:px-0 md:py-0">
+        <Link to="/cliente/barbearias" className="inline-flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+          <ChevronLeft size={16} />
+          Voltar para barbearias
+        </Link>
 
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-5">
+        {catalogError && (
+          <div className="rounded-xl border border-[rgba(248,113,113,0.35)] bg-[rgba(127,29,29,0.2)] px-3 py-2 text-sm text-[#fecaca]">
+            {catalogError}
+          </div>
+        )}
+
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-5">
         <div className="flex flex-wrap items-center gap-4">
           {avatarUrl ? (
             <img src={avatarUrl} alt={`Logo de ${shop.name}`} className="h-16 w-16 rounded-xl object-cover" />

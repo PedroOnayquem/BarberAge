@@ -55,7 +55,20 @@ interface NominatimResult {
   address?: NominatimAddress
 }
 
-const ALLOWED_ORIGINS = ['http://localhost:5173', 'https://barber-age.vercel.app']
+const STATIC_ALLOWED_ORIGINS = ['https://barber-age.vercel.app']
+
+function getAllowedOriginsFromEnv() {
+  const envOrigins = (Deno.env.get('CORS_ALLOWED_ORIGINS') || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+
+  return Array.from(new Set([...STATIC_ALLOWED_ORIGINS, ...envOrigins]))
+}
+
+function isLocalDevOrigin(origin: string) {
+  return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)
+}
 
 const baseCorsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -65,7 +78,11 @@ const baseCorsHeaders = {
 
 function resolveCorsHeaders(req: Request) {
   const origin = req.headers.get('origin') ?? ''
-  const allowOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+  const allowedOrigins = getAllowedOriginsFromEnv()
+  const allowOrigin =
+    origin && (isLocalDevOrigin(origin) || allowedOrigins.includes(origin))
+      ? origin
+      : allowedOrigins[0] || 'https://barber-age.vercel.app'
 
   return {
     ...baseCorsHeaders,

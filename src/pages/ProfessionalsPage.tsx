@@ -83,6 +83,7 @@ export function ProfessionalsPage() {
       shop_id: currentShop.id,
       name: formName,
       phone: normalizedPhone || null,
+      active: true,
     }
 
     if (editingProfessional) {
@@ -199,5 +200,4 @@ export function ProfessionalsPage() {
     </div>
   )
 }
-
 

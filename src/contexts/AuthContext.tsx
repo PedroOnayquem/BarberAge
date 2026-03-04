@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { Tables } from '../types/database'
@@ -36,6 +36,7 @@ interface AuthState {
 const AuthContext = createContext<AuthState | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const loadRequestRef = useRef(0)
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [currentShop, setCurrentShopState] = useState<Shop | null>(null)
@@ -53,9 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadUserData(session.user.id, session.user)
+        setLoading(true)
+        void loadUserData(session.user.id, session.user)
       } else {
-        setLoading(false)
+        resetState()
       }
     })
 
@@ -63,7 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadUserData(session.user.id, session.user)
+        setLoading(true)
+        void loadUserData(session.user.id, session.user)
       } else {
         resetState()
       }
@@ -73,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   function resetState() {
+    loadRequestRef.current += 1
     setShops([])
     setCurrentShopState(null)
     setMembership(null)
@@ -85,6 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function loadUserData(userId: string, authUser?: User) {
+    const requestId = ++loadRequestRef.current
+
     // Clear stale role-linked data before reloading
     setShops([])
     setCurrentShopState(null)
@@ -94,69 +100,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setClientGlobalProfile(null)
     setClientShop(null)
 
-    // Load memberships + client links in parallel
-    const [membersRes, clientUsersRes] = await Promise.all([
-      supabase.from('shop_members').select('*, shops(*)').eq('user_id', userId),
-      supabase.from('client_users').select('*, shops(*), clients(*)').eq('user_id', userId),
-    ])
+    try {
+      // Load memberships + client links in parallel
+      const [membersRes, clientUsersRes] = await Promise.all([
+        supabase.from('shop_members').select('*, shops(*)').eq('user_id', userId),
+        supabase.from('client_users').select('*, shops(*), clients(*)').eq('user_id', userId),
+      ])
 
-    const members = membersRes.data
-    const clientUsers = clientUsersRes.data
-    const meta = (authUser?.user_metadata || {}) as Record<string, unknown>
-    const isClientFromMetadata =
-      meta.role === 'client' || meta.account_type === 'client'
-    const globalClientProfile: ClientGlobalProfile | null =
-      isClientFromMetadata || typeof meta.name === 'string' || typeof meta.phone === 'string'
-        ? {
-            name: typeof meta.name === 'string' ? meta.name : null,
-            phone: typeof meta.phone === 'string' ? meta.phone : null,
-            email: authUser?.email ?? null,
-          }
-        : null
+      if (requestId !== loadRequestRef.current) return
 
-    // Check if user is a shop member
-    if (members && members.length > 0) {
-      const shopList = members
-        .map((m) => (m as any).shops as Shop)
-        .filter(Boolean)
-      setShops(shopList)
+      if (membersRes.error && import.meta.env.DEV) {
+        console.error('[auth] loadUserData shop_members error', membersRes.error)
+      }
+      if (clientUsersRes.error && import.meta.env.DEV) {
+        console.error('[auth] loadUserData client_users error', clientUsersRes.error)
+      }
 
-      const savedShopId = localStorage.getItem('barberage_current_shop')
-      const savedMember = members.find((m) => m.shop_id === savedShopId)
+      const members = membersRes.data || []
+      const clientUsers = clientUsersRes.data || []
+      const meta = (authUser?.user_metadata || {}) as Record<string, unknown>
+      const isClientFromMetadata =
+        meta.role === 'client' || meta.account_type === 'client'
+      const globalClientProfile: ClientGlobalProfile | null =
+        isClientFromMetadata || typeof meta.name === 'string' || typeof meta.phone === 'string'
+          ? {
+              name: typeof meta.name === 'string' ? meta.name : null,
+              phone: typeof meta.phone === 'string' ? meta.phone : null,
+              email: authUser?.email ?? null,
+            }
+          : null
 
-      if (savedMember && (savedMember as any).shops) {
-        setCurrentShopState((savedMember as any).shops as Shop)
-        setMembership(savedMember)
-        setUserRole(savedMember.role as UserRole)
-      } else {
-        setCurrentShopState((members[0] as any).shops as Shop)
-        setMembership(members[0])
-        setUserRole(members[0].role as UserRole)
+      // Check if user is a shop member
+      if (members.length > 0) {
+        const shopList = members
+          .map((m) => (m as any).shops as Shop)
+          .filter(Boolean)
+        setShops(shopList)
+
+        const savedShopId = localStorage.getItem('barberage_current_shop')
+        const savedMember = members.find((m) => m.shop_id === savedShopId)
+
+        if (savedMember && (savedMember as any).shops) {
+          setCurrentShopState((savedMember as any).shops as Shop)
+          setMembership(savedMember)
+          setUserRole(savedMember.role as UserRole)
+        } else {
+          setCurrentShopState((members[0] as any).shops as Shop)
+          setMembership(members[0])
+          setUserRole(members[0].role as UserRole)
+        }
+      }
+
+      // Check if user is a client
+      if (clientUsers.length > 0) {
+        setClientUser(clientUsers[0])
+        setClientShop((clientUsers[0] as any).shops as Shop)
+        setClientProfile((clientUsers[0] as any).clients as Client)
+      }
+
+      if (globalClientProfile) {
+        setClientGlobalProfile(globalClientProfile)
+      }
+
+      // If not a shop member, client role is defined by metadata profile or old shop-linked client.
+      if (members.length === 0 && (globalClientProfile || clientUsers.length > 0)) {
+        setUserRole('client')
+      }
+
+      // If neither, leave role as null (new user, needs onboarding)
+      if (members.length === 0 && !globalClientProfile && clientUsers.length === 0) {
+        setUserRole(null)
+      }
+    } finally {
+      if (requestId === loadRequestRef.current) {
+        setLoading(false)
       }
     }
-
-    // Check if user is a client
-    if (clientUsers && clientUsers.length > 0) {
-      setClientUser(clientUsers[0])
-      setClientShop((clientUsers[0] as any).shops as Shop)
-      setClientProfile((clientUsers[0] as any).clients as Client)
-    }
-
-    if (globalClientProfile) {
-      setClientGlobalProfile(globalClientProfile)
-    }
-
-    // If not a shop member, client role is defined by metadata profile or old shop-linked client.
-    if ((!members || members.length === 0) && (globalClientProfile || (clientUsers && clientUsers.length > 0))) {
-      setUserRole('client')
-    }
-
-    // If neither, leave role as null (new user, needs onboarding)
-    if ((!members || members.length === 0) && !globalClientProfile && (!clientUsers || clientUsers.length === 0)) {
-      setUserRole(null)
-    }
-
-    setLoading(false)
   }
 
   async function refreshUserData() {

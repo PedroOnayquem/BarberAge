@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Check, ChevronLeft, Clock, Scissors, User } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -34,6 +35,7 @@ export function ClientBookingPage() {
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [slotsError, setSlotsError] = useState('')
+  const [catalogError, setCatalogError] = useState('')
 
   // Booking
   const [bookingLoading, setBookingLoading] = useState(false)
@@ -41,17 +43,35 @@ export function ClientBookingPage() {
   const [bookingSuccess, setBookingSuccess] = useState(false)
 
   useEffect(() => {
-    if (shopId) loadData()
+    if (!shopId) {
+      setServices([])
+      setProfessionals([])
+      setLoading(false)
+      return
+    }
+    void loadData()
   }, [shopId])
 
   async function loadData() {
     setLoading(true)
+    setCatalogError('')
     const [sRes, pRes] = await Promise.all([
       supabase.from('services').select('*').eq('shop_id', shopId!).eq('active', true).order('name'),
       supabase.from('professionals').select('*').eq('shop_id', shopId!).eq('active', true).order('name'),
     ])
-    setServices(sRes.data || [])
-    setProfessionals(pRes.data || [])
+
+    if (sRes.error || pRes.error) {
+      setCatalogError('Não foi possível carregar o catálogo desta barbearia agora.')
+      if (import.meta.env.DEV) {
+        console.error('[client-booking] catalog load error', {
+          servicesError: sRes.error,
+          professionalsError: pRes.error,
+        })
+      }
+    }
+
+    setServices((sRes.data || []) as Service[])
+    setProfessionals((pRes.data || []) as Professional[])
     setLoading(false)
   }
 
@@ -176,6 +196,23 @@ export function ClientBookingPage() {
     )
   }
 
+  if (!shopId || !clientUser) {
+    return (
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-6 text-center">
+        <h1 className="text-lg font-bold text-[var(--color-text)]">Selecione uma barbearia para agendar</h1>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+          Não encontramos uma barbearia vinculada ao seu perfil nesta tela.
+        </p>
+        <Link
+          to="/cliente/barbearias"
+          className="mt-4 inline-flex rounded-xl bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-accent-hover)]"
+        >
+          Ver barbearias
+        </Link>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -184,6 +221,12 @@ export function ClientBookingPage() {
           Escolha o serviço, profissional e horário
         </p>
       </div>
+
+      {catalogError && (
+        <div className="rounded-xl border border-[rgba(248,113,113,0.35)] bg-[rgba(127,29,29,0.2)] px-3 py-2 text-sm text-[#fecaca]">
+          {catalogError}
+        </div>
+      )}
 
       {/* Steps indicator */}
       <div className="flex gap-1">
@@ -404,6 +447,5 @@ export function ClientBookingPage() {
     </div>
   )
 }
-
 
 

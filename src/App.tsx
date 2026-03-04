@@ -4,7 +4,6 @@ import { ThemeProvider } from './contexts/ThemeContext'
 import { AppLayout } from './components/layout/AppLayout'
 import { ClientMobileLayout } from './components/layout/ClientMobileLayout'
 import { LoginPage } from './pages/auth/LoginPage'
-import { RegisterPage } from './pages/auth/RegisterPage'
 import { RegisterClientPage } from './pages/auth/RegisterClientPage'
 import { CreateShopPage } from './pages/auth/CreateShopPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -52,16 +51,9 @@ function ClientProtectedRoute({ children }: { children: ReactNode }) {
 }
 
 function PublicRoute({ children }: { children: ReactNode }) {
-  const { user, loading, currentShop, userRole } = useAuth()
+  const { loading } = useAuth()
 
   if (loading) return <LoadingScreen />
-
-  // If logged in, redirect based on role
-  if (user) {
-    if (userRole === 'client') return <Navigate to="/cliente/barbearias" replace />
-    if (currentShop) return <Navigate to="/app/dashboard" replace />
-    return <Navigate to="/create-shop" replace />
-  }
 
   return <>{children}</>
 }
@@ -70,9 +62,8 @@ function CreateShopRoute({ children }: { children: ReactNode }) {
   const { user, loading, currentShop, userRole } = useAuth()
 
   if (loading) return <LoadingScreen />
-  if (!user) return <Navigate to="/login" replace />
   if (userRole === 'client') return <Navigate to="/cliente/barbearias" replace />
-  if (currentShop) return <Navigate to="/app/dashboard" replace />
+  if (user && currentShop) return <Navigate to="/app/dashboard" replace />
 
   return <>{children}</>
 }
@@ -89,7 +80,7 @@ function AppRoutes() {
 
       {/* Public routes */}
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-      <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+      <Route path="/register" element={<Navigate to="/create-shop" replace />} />
       <Route path="/cliente/register" element={<PublicRoute><RegisterClientPage /></PublicRoute>} />
       <Route path="/create-shop" element={<CreateShopRoute><CreateShopPage /></CreateShopRoute>} />
 
@@ -122,13 +113,7 @@ function AppRoutes() {
 }
 
 function RootRedirect() {
-  const { user, loading, currentShop, userRole } = useAuth()
-
-  if (loading) return <LoadingScreen />
-  if (!user) return <Navigate to="/login" replace />
-  if (userRole === 'client') return <Navigate to="/cliente/barbearias" replace />
-  if (currentShop) return <Navigate to="/app/dashboard" replace />
-  return <Navigate to="/create-shop" replace />
+  return <Navigate to="/login" replace />
 }
 
 function App() {
