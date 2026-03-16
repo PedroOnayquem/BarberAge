@@ -60,10 +60,6 @@ export function ClientBarbershopsPage() {
   const [error, setError] = useState('')
   const [activeCategory, setActiveCategory] = useState<CategoryId>('all')
 
-  useEffect(() => {
-    loadShops()
-  }, [clientShop?.id])
-
   function getShopCatalogStatus(shop: FilteredPublicBarbershopStatus): { label: string; canBook: boolean; reason: string } {
     const canBook = !!shop.can_book
     const reason = canBook
@@ -130,6 +126,10 @@ export function ClientBarbershopsPage() {
     setShops(cards)
     setLoading(false)
   }
+
+  useEffect(() => {
+    void loadShops()
+  }, [clientShop?.id])
 
   const categoryMeta = useMemo(() => {
     const available = shops.filter((shop) => shop.can_book)

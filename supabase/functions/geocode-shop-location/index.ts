@@ -26,6 +26,7 @@ interface LocationFields {
 
 interface QueryCandidate {
   query: string
+  boost: number
 }
 
 interface NormalizedCoordinates {
@@ -56,6 +57,8 @@ interface NominatimResult {
 }
 
 const STATIC_ALLOWED_ORIGINS = ['https://barber-age.vercel.app']
+const MAX_QUERY_CANDIDATES = 6
+const NOMINATIM_TIMEOUT_MS = 10000
 
 function getAllowedOriginsFromEnv() {
   const envOrigins = (Deno.env.get('CORS_ALLOWED_ORIGINS') || '')
@@ -154,25 +157,67 @@ function buildQueryParts(parts: Array<string | null | undefined>) {
     .join(', ')
 }
 
-function buildFullAddressQuery(fields: LocationFields) {
+function expandStreetVariants(value: string) {
+  const base = sanitize(value)
+  if (!base) return []
+
+  const replacements = [
+    base,
+    base
+      .replace(/\btv\.?\b/gi, 'travessa')
+      .replace(/\btrav\.?\b/gi, 'travessa')
+      .replace(/\br\.?\b/gi, 'rua')
+      .replace(/\bav\.?\b/gi, 'avenida')
+      .replace(/\bal\.?\b/gi, 'alameda'),
+  ]
+
+  return Array.from(new Set(replacements.map((entry) => sanitize(entry)).filter(Boolean)))
+}
+
+function buildQueryCandidates(fields: LocationFields): QueryCandidate[] {
+  const address = sanitize(fields.address)
   const street = sanitize(fields.address_street)
   const number = sanitize(fields.address_number)
   const neighborhood = sanitize(fields.neighborhood)
   const city = sanitize(fields.city)
   const state = sanitize(fields.state).toUpperCase()
   const cep = formatCep(fields.cep)
+  const cityState = [city, state].filter(Boolean).join(' - ')
 
-  const streetWithNumber = street && number ? `${street}, ${number}` : buildQueryParts([street, number])
-  const streetBlock = neighborhood ? `${streetWithNumber} - ${neighborhood}` : streetWithNumber
-  const cityStateBlock = [city, state].filter(Boolean).join(' - ')
+  const seen = new Set<string>()
+  const candidates: QueryCandidate[] = []
+  const baseStreetCandidates = expandStreetVariants(street || address)
 
-  return buildQueryParts([streetBlock, cityStateBlock, cep, 'Brazil'])
-}
+  function pushCandidate(query: string, boost: number) {
+    const normalized = sanitize(query)
+    if (!normalized) return
+    const dedupeKey = normalized.toLowerCase()
+    if (seen.has(dedupeKey)) return
+    seen.add(dedupeKey)
+    candidates.push({ query: normalized, boost })
+  }
 
-function buildQueryCandidates(fields: LocationFields): QueryCandidate[] {
-  const query = buildFullAddressQuery(fields)
-  if (!query) return []
-  return [{ query }]
+  for (const streetVariant of baseStreetCandidates) {
+    const streetWithNumber =
+      streetVariant && number ? `${streetVariant}, ${number}` : buildQueryParts([streetVariant, number])
+    pushCandidate(buildQueryParts([streetWithNumber, neighborhood, cityState, cep, 'Brazil']), 10)
+    pushCandidate(buildQueryParts([streetWithNumber, cityState, cep, 'Brazil']), 8)
+    pushCandidate(buildQueryParts([streetWithNumber, cityState, 'Brazil']), 6)
+  }
+
+  if (address && address !== street) {
+    pushCandidate(buildQueryParts([address, neighborhood, cityState, cep, 'Brazil']), 7)
+    pushCandidate(buildQueryParts([address, cityState, cep, 'Brazil']), 5)
+    pushCandidate(buildQueryParts([address, cityState, 'Brazil']), 4)
+  }
+
+  if (cep) {
+    pushCandidate(buildQueryParts([`CEP ${cep}`, city, state, 'Brazil']), 2)
+    pushCandidate(buildQueryParts([cep, city, state, 'Brazil']), 2)
+  }
+
+  pushCandidate(buildQueryParts([city, state, 'Brazil']), 1)
+  return candidates.slice(0, MAX_QUERY_CANDIDATES)
 }
 
 function hasMinimumAddress(fields: LocationFields) {
@@ -237,7 +282,7 @@ function extractAddressCity(address?: NominatimAddress) {
   return sanitize(address.city || address.town || address.village || address.municipality || '')
 }
 
-function scoreNominatimResult(result: NominatimResult, fields: LocationFields) {
+function scoreNominatimResult(result: NominatimResult, fields: LocationFields, boost: number) {
   const address = result.address || {}
   const queryPostcode = normalizeCep(fields.cep)
   const resultPostcode = normalizeCep(address.postcode)
@@ -247,33 +292,36 @@ function scoreNominatimResult(result: NominatimResult, fields: LocationFields) {
   const resultStreet = normalizeForMatch(address.road)
   const queryCity = normalizeForMatch(fields.city)
   const resultCity = normalizeForMatch(extractAddressCity(address))
+  const queryState = normalizeForMatch(fields.state)
+  const resultState = normalizeForMatch(address.state)
   const importance = parseCoordinate(result.importance) || 0
 
-  let score = importance * 20
+  let score = importance * 20 + boost
 
   if (resultPostcode) score += 6
-  if (queryPostcode && resultPostcode === queryPostcode) score += 16
+  if (queryPostcode && resultPostcode === queryPostcode) score += 18
 
   if (resultNumber) score += 6
-  if (queryNumber && resultNumber && queryNumber === resultNumber) score += 20
+  if (queryNumber && resultNumber && queryNumber === resultNumber) score += 24
 
   if (queryStreet && resultStreet) {
     if (queryStreet === resultStreet) score += 10
     else if (queryStreet.includes(resultStreet) || resultStreet.includes(queryStreet)) score += 4
   }
 
-  if (queryCity && resultCity && queryCity === resultCity) score += 6
+  if (queryCity && resultCity && queryCity === resultCity) score += 8
+  if (queryState && resultState && queryState === resultState) score += 5
 
   return score
 }
 
-function pickBestNominatimResult(results: NominatimResult[], fields: LocationFields) {
+function pickBestNominatimResult(results: NominatimResult[], fields: LocationFields, boost: number) {
   if (!results.length) return null
 
   const scored = results.map((result, index) => ({
     result,
     index,
-    score: scoreNominatimResult(result, fields),
+    score: scoreNominatimResult(result, fields, boost),
   }))
 
   scored.sort((a, b) => {
@@ -281,7 +329,7 @@ function pickBestNominatimResult(results: NominatimResult[], fields: LocationFie
     return a.index - b.index
   })
 
-  return scored[0]?.result || null
+  return scored[0] || null
 }
 
 function resolvePrecision(result: NominatimResult): GeocodePrecision {
@@ -365,14 +413,28 @@ async function persistCoordinates(
 
 async function fetchNominatimResults(query: string): Promise<NominatimResult[]> {
   const endpoint =
-    `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&countrycodes=br&q=${encodeURIComponent(query)}`
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=br&q=${encodeURIComponent(query)}`
 
-  const geocodeResponse = await fetch(endpoint, {
-    headers: {
-      'User-Agent': 'Barberage/1.0 (contact: suporte@barberage.app)',
-      'Accept-Language': 'pt-BR,pt;q=0.9',
-    },
-  })
+  const abortController = new AbortController()
+  const timeoutId = setTimeout(() => abortController.abort(), NOMINATIM_TIMEOUT_MS)
+  let geocodeResponse: Response
+
+  try {
+    geocodeResponse = await fetch(endpoint, {
+      signal: abortController.signal,
+      headers: {
+        'User-Agent': 'Barberage/1.0 (contact: suporte@barberage.app)',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+      },
+    })
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      throw new Error('Nominatim request timed out')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (!geocodeResponse.ok) {
     throw new Error(`Nominatim request failed with status ${geocodeResponse.status}`)
@@ -381,6 +443,25 @@ async function fetchNominatimResults(query: string): Promise<NominatimResult[]> 
   const geocodeData = await geocodeResponse.json()
   if (!Array.isArray(geocodeData)) return []
   return geocodeData as NominatimResult[]
+}
+
+function normalizePrecision(value: unknown): GeocodePrecision {
+  const normalized = sanitize(typeof value === 'string' ? value : '').toLowerCase()
+  if (normalized === 'rooftop' || normalized === 'street' || normalized === 'postal_code' || normalized === 'city') {
+    return normalized
+  }
+  return 'street'
+}
+
+function scoreCachedMatch(candidate: QueryCandidate, precision: GeocodePrecision) {
+  const precisionWeight: Record<GeocodePrecision, number> = {
+    rooftop: 30,
+    street: 22,
+    postal_code: 12,
+    city: 6,
+  }
+
+  return candidate.boost + precisionWeight[precision]
 }
 
 Deno.serve(async (req) => {
@@ -483,6 +564,15 @@ Deno.serve(async (req) => {
       return json(req, { error: 'Address is incomplete for geocoding. Informe CEP e número para precisão.' }, 400)
     }
 
+    let bestCachedMatch: {
+      candidate: QueryCandidate
+      coordinates: NormalizedCoordinates
+      precision: GeocodePrecision
+      provider: string
+      formattedAddress: string
+      score: number
+    } | null = null
+
     for (const candidate of queryCandidates) {
       const queryHash = await sha256(candidate.query.toLowerCase())
       const cachedRes = await supabase
@@ -493,52 +583,67 @@ Deno.serve(async (req) => {
 
       const cachedCoords = normalizeCoordinates(cachedRes.data?.latitude, cachedRes.data?.longitude)
       if (!cachedCoords) continue
-      if (cachedCoords.wasSwapped) {
-        console.warn('[geocode-shop-location] swapped cached coordinates corrected', {
-          shopId: shopId || null,
-          query: candidate.query,
-          latitude: cachedRes.data?.latitude ?? null,
-          longitude: cachedRes.data?.longitude ?? null,
-          corrected_latitude: cachedCoords.latitude,
-          corrected_longitude: cachedCoords.longitude,
-        })
-      }
-
-      const cachedPrecisionCandidate = sanitize(cachedRes.data?.geocode_precision as string | undefined).toLowerCase()
-      const cachedPrecision = (
-        ['rooftop', 'street', 'postal_code', 'city'].includes(cachedPrecisionCandidate)
-          ? cachedPrecisionCandidate
-          : 'street'
-      ) as GeocodePrecision
+      const cachedPrecision = normalizePrecision(cachedRes.data?.geocode_precision)
       const cachedProvider = sanitize(cachedRes.data?.provider as string | undefined) || 'nominatim'
       const formattedAddress =
         sanitize(cachedRes.data?.formatted_address as string | undefined) ||
         sanitize(cachedRes.data?.query_text as string | undefined) ||
         candidate.query
+      const score = scoreCachedMatch(candidate, cachedPrecision)
+
+      if (!bestCachedMatch || score > bestCachedMatch.score) {
+        bestCachedMatch = {
+          candidate,
+          coordinates: cachedCoords,
+          precision: cachedPrecision,
+          provider: cachedProvider,
+          formattedAddress,
+          score,
+        }
+      }
+    }
+
+    if (bestCachedMatch) {
+      if (bestCachedMatch.coordinates.wasSwapped) {
+        console.warn('[geocode-shop-location] swapped cached coordinates corrected', {
+          shopId: shopId || null,
+          query: bestCachedMatch.candidate.query,
+          corrected_latitude: bestCachedMatch.coordinates.latitude,
+          corrected_longitude: bestCachedMatch.coordinates.longitude,
+        })
+      }
+
       const geocodedAt = new Date().toISOString()
 
       if (persist) {
-        await persistCoordinates(supabase, shopId, cachedCoords, {
+        await persistCoordinates(supabase, shopId, bestCachedMatch.coordinates, {
           geocodedAt,
-          geocodePrecision: cachedPrecision,
-          geocodeProvider: cachedProvider,
-          formattedAddress,
+          geocodePrecision: bestCachedMatch.precision,
+          geocodeProvider: bestCachedMatch.provider,
+          formattedAddress: bestCachedMatch.formattedAddress,
         })
       }
 
       return json(req, {
-        latitude: cachedCoords.latitude,
-        longitude: cachedCoords.longitude,
+        latitude: bestCachedMatch.coordinates.latitude,
+        longitude: bestCachedMatch.coordinates.longitude,
         source: 'cache',
-        precision: cachedPrecision,
-        geocode_provider: cachedProvider,
+        precision: bestCachedMatch.precision,
+        geocode_provider: bestCachedMatch.provider,
         geocoded_at: geocodedAt,
-        formatted_address: formattedAddress,
+        formatted_address: bestCachedMatch.formattedAddress,
         persisted: persist,
-        query: candidate.query,
-        corrected_swapped_coordinates: cachedCoords.wasSwapped,
+        query: bestCachedMatch.candidate.query,
+        corrected_swapped_coordinates: bestCachedMatch.coordinates.wasSwapped,
       })
     }
+
+    let bestNominatimMatch: {
+      candidate: QueryCandidate
+      result: NominatimResult
+      coordinates: NormalizedCoordinates
+      score: number
+    } | null = null
 
     for (let index = 0; index < queryCandidates.length; index += 1) {
       const candidate = queryCandidates[index]
@@ -553,40 +658,51 @@ Deno.serve(async (req) => {
         return json(req, { error: 'Nominatim request failed' }, 502)
       }
 
-      const bestResult = pickBestNominatimResult(results, fields)
-      if (!bestResult?.lat || !bestResult?.lon) {
+      const bestResult = pickBestNominatimResult(results, fields, candidate.boost)
+      if (bestResult?.result?.lat == null || bestResult.result.lon == null) {
         continue
       }
 
-      const normalizedCoords = normalizeCoordinates(bestResult.lat, bestResult.lon)
+      const normalizedCoords = normalizeCoordinates(bestResult.result.lat, bestResult.result.lon)
       if (!normalizedCoords) {
         continue
       }
-      if (normalizedCoords.wasSwapped) {
+
+      if (!bestNominatimMatch || bestResult.score > bestNominatimMatch.score) {
+        bestNominatimMatch = {
+          candidate,
+          result: bestResult.result,
+          coordinates: normalizedCoords,
+          score: bestResult.score,
+        }
+      }
+    }
+
+    if (bestNominatimMatch) {
+      if (bestNominatimMatch.coordinates.wasSwapped) {
         console.warn('[geocode-shop-location] swapped nominatim coordinates corrected', {
           shopId: shopId || null,
-          query: candidate.query,
-          lat: bestResult.lat ?? null,
-          lon: bestResult.lon ?? null,
-          corrected_latitude: normalizedCoords.latitude,
-          corrected_longitude: normalizedCoords.longitude,
+          query: bestNominatimMatch.candidate.query,
+          lat: bestNominatimMatch.result.lat ?? null,
+          lon: bestNominatimMatch.result.lon ?? null,
+          corrected_latitude: bestNominatimMatch.coordinates.latitude,
+          corrected_longitude: bestNominatimMatch.coordinates.longitude,
         })
       }
 
-      const geocodePrecision = resolvePrecision(bestResult)
-      const formattedAddress = resolveFormattedAddress(bestResult, candidate.query)
+      const geocodePrecision = resolvePrecision(bestNominatimMatch.result)
+      const formattedAddress = resolveFormattedAddress(bestNominatimMatch.result, bestNominatimMatch.candidate.query)
       const geocodeProvider = 'nominatim'
       const geocodedAt = new Date().toISOString()
-
-      const queryHash = await sha256(candidate.query.toLowerCase())
+      const queryHash = await sha256(bestNominatimMatch.candidate.query.toLowerCase())
       await supabase
         .from('geocode_cache')
         .upsert(
           {
             query_hash: queryHash,
-            query_text: candidate.query,
-            latitude: normalizedCoords.latitude,
-            longitude: normalizedCoords.longitude,
+            query_text: bestNominatimMatch.candidate.query,
+            latitude: bestNominatimMatch.coordinates.latitude,
+            longitude: bestNominatimMatch.coordinates.longitude,
             provider: geocodeProvider,
             geocode_precision: geocodePrecision,
             formatted_address: formattedAddress,
@@ -596,7 +712,7 @@ Deno.serve(async (req) => {
         )
 
       if (persist) {
-        await persistCoordinates(supabase, shopId, normalizedCoords, {
+        await persistCoordinates(supabase, shopId, bestNominatimMatch.coordinates, {
           geocodedAt,
           geocodePrecision,
           geocodeProvider,
@@ -605,16 +721,16 @@ Deno.serve(async (req) => {
       }
 
       return json(req, {
-        latitude: normalizedCoords.latitude,
-        longitude: normalizedCoords.longitude,
+        latitude: bestNominatimMatch.coordinates.latitude,
+        longitude: bestNominatimMatch.coordinates.longitude,
         source: 'nominatim',
         precision: geocodePrecision,
         geocode_provider: geocodeProvider,
         geocoded_at: geocodedAt,
         formatted_address: formattedAddress,
         persisted: persist,
-        query: candidate.query,
-        corrected_swapped_coordinates: normalizedCoords.wasSwapped,
+        query: bestNominatimMatch.candidate.query,
+        corrected_swapped_coordinates: bestNominatimMatch.coordinates.wasSwapped,
       })
     }
 

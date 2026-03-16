@@ -68,8 +68,7 @@ export function LoginPage() {
       }
 
       if (!members || members.length === 0) {
-        setError('Esta conta não está vinculada a nenhuma barbearia. Cadastre-se como barbearia primeiro.')
-        await supabase.auth.signOut()
+        navigate('/create-shop', { replace: true })
         setLoading(false)
         return
       }
@@ -156,7 +155,7 @@ export function LoginPage() {
             <p className="pt-3 text-center text-xs text-[var(--color-text-muted)]">
               Nao tem conta?{' '}
               <Link
-                to="/register"
+                to="/create-shop?intent=new"
                 className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
               >
                 Barbearia
@@ -208,7 +207,7 @@ export function LoginPage() {
               Nao tem conta?{' '}
               {mode === 'shop' ? (
                 <Link
-                  to="/register"
+                  to="/create-shop?intent=new"
                   className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
                 >
                   Criar conta

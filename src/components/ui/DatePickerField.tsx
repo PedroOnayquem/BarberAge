@@ -1,8 +1,10 @@
 import { CalendarDays } from 'lucide-react'
 import { format, parseISO, startOfDay } from 'date-fns'
 import { ptBR, type Locale } from 'date-fns/locale'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { DatePickerCard } from './DatePickerCard'
+import { usePickerPopover } from './usePickerPopover'
 
 interface DatePickerFieldProps {
   label: string
@@ -31,30 +33,37 @@ export function DatePickerField({
   locale = ptBR,
 }: DatePickerFieldProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const [open, setOpen] = useState(false)
   const parsed = useMemo(() => parseValue(value), [value])
   const selectedDate = parsed ?? startOfDay(new Date())
   const displayValue = parsed ? format(parsed, 'dd/MM/yyyy', { locale }) : ''
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (!containerRef.current) return
-      if (!containerRef.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  const { popoverRef, popoverStyle } = usePickerPopover({
+    open,
+    onClose: () => setOpen(false),
+    containerRef,
+    triggerRef,
+    minDesktopWidth: 320,
+    maxWidth: 340,
+    estimatedHeight: 380,
+  })
 
   return (
     <div className="space-y-1.5">
-      <div ref={containerRef} className="relative">
+      <div ref={containerRef} className="relative outlined-field">
         <button
+          ref={triggerRef}
           type="button"
           disabled={disabled}
           onClick={() => {
             setOpen((prev) => !prev)
+          }}
+          onKeyDown={(event) => {
+            if (disabled) return
+            if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              setOpen(true)
+            }
           }}
           className={`w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-input-bg)] px-3.5 pb-2 pt-5 text-left text-sm text-[var(--color-text)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/25 disabled:cursor-not-allowed disabled:opacity-60 ${
             error ? 'border-red-500' : ''
@@ -74,19 +83,27 @@ export function DatePickerField({
           <CalendarDays size={16} />
         </span>
 
-        {open && (
-          <div className="barber-datepicker-popover" role="dialog" aria-label={`${label} calendário`}>
-            <DatePickerCard
-              value={selectedDate}
-              onChange={(next) => {
-                onChange(format(next, 'yyyy-MM-dd'))
-                setOpen(false)
-              }}
-              minDate={minDate}
-              locale={locale}
-            />
-          </div>
-        )}
+        {open &&
+          createPortal(
+            <div
+              ref={popoverRef}
+              className="barber-datepicker-popover"
+              style={popoverStyle}
+              role="dialog"
+              aria-label={`${label} calendário`}
+            >
+              <DatePickerCard
+                value={selectedDate}
+                onChange={(next) => {
+                  onChange(format(next, 'yyyy-MM-dd'))
+                  setOpen(false)
+                }}
+                minDate={minDate}
+                locale={locale}
+              />
+            </div>,
+            document.body
+          )}
       </div>
 
       {helperText && !error && <p className="text-xs text-[var(--color-text-muted)]">{helperText}</p>}

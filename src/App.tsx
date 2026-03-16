@@ -20,7 +20,18 @@ import { ClientBarbershopsPage } from './pages/cliente/ClientBarbershopsPage'
 import { ClientBarbershopBookingPage } from './pages/cliente/ClientBarbershopBookingPage'
 import { ClientSearchPage } from './pages/cliente/ClientSearchPage'
 import { ClientProfilePage } from './pages/cliente/ClientProfilePage'
-import type { ReactNode } from 'react'
+import { type ReactNode } from 'react'
+
+function resolveAuthenticatedDestination(params: {
+  user: ReturnType<typeof useAuth>['user']
+  currentShop: ReturnType<typeof useAuth>['currentShop']
+  userRole: ReturnType<typeof useAuth>['userRole']
+}) {
+  if (!params.user) return null
+  if (params.currentShop) return '/app/dashboard'
+  if (params.userRole === 'client') return '/cliente/barbearias'
+  return '/create-shop'
+}
 
 function LoadingScreen() {
   return (
@@ -34,7 +45,7 @@ function ShopProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading, currentShop } = useAuth()
 
   if (loading) return <LoadingScreen />
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/register" replace />
   if (!currentShop) return <Navigate to="/create-shop" replace />
 
   return <>{children}</>
@@ -44,16 +55,26 @@ function ClientProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading, userRole } = useAuth()
 
   if (loading) return <LoadingScreen />
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/register" replace />
   if (userRole !== 'client') return <Navigate to="/cliente/register" replace />
 
   return <>{children}</>
 }
 
-function PublicRoute({ children }: { children: ReactNode }) {
-  const { loading } = useAuth()
+function PublicRoute({
+  children,
+  allowAuthenticated = false,
+}: {
+  children: ReactNode
+  allowAuthenticated?: boolean
+}) {
+  const { loading, user, currentShop, userRole } = useAuth()
 
   if (loading) return <LoadingScreen />
+  if (!allowAuthenticated) {
+    const redirectTo = resolveAuthenticatedDestination({ user, currentShop, userRole })
+    if (redirectTo) return <Navigate to={redirectTo} replace />
+  }
 
   return <>{children}</>
 }
@@ -69,6 +90,12 @@ function CreateShopRoute({ children }: { children: ReactNode }) {
 }
 
 function AppRoutes() {
+  const createShopElement = (
+    <CreateShopRoute>
+      <CreateShopPage />
+    </CreateShopRoute>
+  )
+
   return (
     <Routes>
       {/* Root route */}
@@ -79,10 +106,10 @@ function AppRoutes() {
       <Route path="/barbearias/:slug" element={<BarbershopPublicPage />} />
 
       {/* Public routes */}
-      <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-      <Route path="/register" element={<Navigate to="/create-shop" replace />} />
+      <Route path="/login" element={<Navigate to="/register" replace />} />
+      <Route path="/register" element={<PublicRoute allowAuthenticated><LoginPage /></PublicRoute>} />
       <Route path="/cliente/register" element={<PublicRoute><RegisterClientPage /></PublicRoute>} />
-      <Route path="/create-shop" element={<CreateShopRoute><CreateShopPage /></CreateShopRoute>} />
+      <Route path="/create-shop" element={createShopElement} />
 
       {/* Shop admin routes (/app/*) */}
       <Route path="/app" element={<ShopProtectedRoute><AppLayout /></ShopProtectedRoute>}>
@@ -113,7 +140,7 @@ function AppRoutes() {
 }
 
 function RootRedirect() {
-  return <Navigate to="/login" replace />
+  return <Navigate to="/register" replace />
 }
 
 function App() {

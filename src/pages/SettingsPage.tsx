@@ -11,18 +11,22 @@ import { TimePickerField } from '../components/ui/TimePickerField'
 import { Modal } from '../components/ui/Modal'
 import { Card } from '../components/ui/Card'
 import { AvatarCropModal } from '../components/ui/AvatarCropModal'
-import { format, parseISO } from 'date-fns'
 import { translateError } from '../lib/errorMessages'
 import { getSignedAvatarUrl, uploadShopAvatar, validateAvatarFile, SHOP_AVATARS_BUCKET } from '../lib/avatarStorage'
 import {
+  buildReadableAddress,
   buildAddressLine,
   buildAddressSignature,
   formatCep,
+  formatGeocodeProviderLabel,
+  formatLocationPrecisionLabel,
   hasMinimumAddressForGeocoding,
   normalizeAndRepairCoordinates,
   normalizeCep,
+  normalizeGeocodePrecision,
 } from '../lib/location'
 import { caretIndexFromDigitCount, countDigitsBeforeCaret, formatPhone, normalizePhone } from '../lib/phone'
+import { formatShortDateTimeInTimeZone, zonedDateTimeToUtcIso } from '../lib/timezone'
 import type { Tables } from '../types/database'
 
 type Shop = Tables<'shops'>
@@ -130,7 +134,13 @@ export function SettingsPage() {
         />
       )}
       {activeTab === 'hours' && <BusinessHoursSettings shopId={currentShop?.id} isAdmin={isAdmin} />}
-      {activeTab === 'timeoff' && <TimeOffSettings shopId={currentShop?.id} isAdmin={isAdmin} />}
+      {activeTab === 'timeoff' && (
+        <TimeOffSettings
+          shopId={currentShop?.id}
+          timeZone={currentShop?.timezone || 'America/Sao_Paulo'}
+          isAdmin={isAdmin}
+        />
+      )}
       {activeTab === 'members' && <MembersSettings shopId={currentShop?.id} isAdmin={isAdmin} />}
     </div>
   )
@@ -158,6 +168,10 @@ function ShopSettings({
   const [stateCode, setStateCode] = useState('')
   const [latitude, setLatitude] = useState<number | null>(null)
   const [longitude, setLongitude] = useState<number | null>(null)
+  const [formattedAddress, setFormattedAddress] = useState('')
+  const [geocodePrecision, setGeocodePrecision] = useState('')
+  const [geocodeProvider, setGeocodeProvider] = useState('')
+  const [geocodedAt, setGeocodedAt] = useState('')
   const [timezone, setTimezone] = useState('')
   const [slotIntervalMinutes, setSlotIntervalMinutes] = useState('30')
   const [bufferMinutes, setBufferMinutes] = useState('0')
@@ -245,6 +259,14 @@ function ShopSettings({
     return ''
   }
 
+  function formatGeocodedTimestamp(value: string) {
+    const normalized = value.trim()
+    if (!normalized) return ''
+    const parsed = new Date(normalized)
+    if (Number.isNaN(parsed.getTime())) return ''
+    return parsed.toLocaleString('pt-BR')
+  }
+
   function applyShopRecordToForm(record: Partial<Shop> & Record<string, unknown>) {
     const rawName = readText(record.name)
     const rawPhone = readText(record.phone)
@@ -255,6 +277,10 @@ function ShopSettings({
     const rawNeighborhood = readText(record.neighborhood)
     const rawCity = readText(record.city)
     const rawState = readText(record.state) || readText(record.uf)
+    const rawFormattedAddress = readText(record.formatted_address)
+    const rawGeocodePrecision = normalizeGeocodePrecision(record.geocode_precision) || ''
+    const rawGeocodeProvider = readText(record.geocode_provider)
+    const rawGeocodedAt = readText(record.geocoded_at)
     const rawTimezone = readText(record.timezone)
     const parsedCoords = normalizeCoordinates(record.latitude, record.longitude, 'shop-record')
     const parsedSlotInterval = Number.parseInt(readText(record.slot_interval_minutes), 10)
@@ -271,6 +297,10 @@ function ShopSettings({
     setStateCode(rawState.toUpperCase())
     setLatitude(parsedCoords.latitude)
     setLongitude(parsedCoords.longitude)
+    setFormattedAddress(rawFormattedAddress)
+    setGeocodePrecision(rawGeocodePrecision)
+    setGeocodeProvider(rawGeocodeProvider)
+    setGeocodedAt(rawGeocodedAt)
     setTimezone(rawTimezone || 'America/Sao_Paulo')
     setSlotIntervalMinutes(String(Number.isInteger(parsedSlotInterval) ? parsedSlotInterval : 30))
     setBufferMinutes(String(Number.isInteger(parsedBuffer) ? parsedBuffer : 0))
@@ -498,6 +528,10 @@ function ShopSettings({
 
     const normalizedLatitude = addressChanged ? null : existingCoords.latitude
     const normalizedLongitude = addressChanged ? null : existingCoords.longitude
+    const normalizedFormattedAddress = addressChanged ? null : (formattedAddress.trim() || null)
+    const normalizedGeocodePrecision = addressChanged ? null : (normalizeGeocodePrecision(geocodePrecision) || null)
+    const normalizedGeocodeProvider = addressChanged ? null : (geocodeProvider.trim() || null)
+    const normalizedGeocodedAt = addressChanged ? null : (geocodedAt.trim() || null)
     const normalizedTimezone = timezone.trim() || 'America/Sao_Paulo'
 
     const fullPayloadCandidate = {
@@ -513,6 +547,10 @@ function ShopSettings({
       state: normalizedState || null,
       latitude: normalizedLatitude,
       longitude: normalizedLongitude,
+      formatted_address: normalizedFormattedAddress,
+      geocode_precision: normalizedGeocodePrecision,
+      geocode_provider: normalizedGeocodeProvider,
+      geocoded_at: normalizedGeocodedAt,
       timezone: normalizedTimezone,
       slot_interval_minutes: parsedSlotInterval,
       buffer_minutes: parsedBuffer,
@@ -718,9 +756,19 @@ function ShopSettings({
             geocodePayload.longitude,
             'geocode-response'
           )
+          const nextFormattedAddress =
+            typeof geocodePayload.formatted_address === 'string' ? geocodePayload.formatted_address.trim() : ''
+          const nextGeocodePrecision =
+            normalizeGeocodePrecision(geocodePayload.precision ?? geocodePayload.geocode_precision) || ''
+          const nextGeocodeProvider = readText(geocodePayload.geocode_provider)
+          const nextGeocodedAt = readText(geocodePayload.geocoded_at) || new Date().toISOString()
           if (parsedCoords.latitude !== null && parsedCoords.longitude !== null) {
             setLatitude(parsedCoords.latitude)
             setLongitude(parsedCoords.longitude)
+            setFormattedAddress(nextFormattedAddress)
+            setGeocodePrecision(nextGeocodePrecision)
+            setGeocodeProvider(nextGeocodeProvider)
+            setGeocodedAt(nextGeocodedAt)
             if (import.meta.env.DEV) {
               console.info('[settings][geocode] resolved destination', {
                 shopId: shop.id,
@@ -826,6 +874,50 @@ function ShopSettings({
   }
 
   const publicShopUrl = shop ? buildPublicShopUrl(shop.slug) : ''
+  const currentAddressLabel = buildReadableAddress({
+    cep,
+    address_street: addressStreet,
+    address_number: addressNumber,
+    complement,
+    neighborhood,
+    city,
+    state: stateCode,
+  })
+  const shopAddressSignature = shop
+    ? buildAddressSignature({
+        cep: shop.cep,
+        address_street: shop.address_street,
+        address_number: shop.address_number,
+        neighborhood: shop.neighborhood,
+        city: shop.city,
+        state: shop.state,
+        complement: shop.complement,
+      })
+    : ''
+  const draftAddressSignature = buildAddressSignature({
+    cep,
+    address_street: addressStreet,
+    address_number: addressNumber,
+    neighborhood,
+    city,
+    state: stateCode,
+    complement,
+  })
+  const locationDraftChanged = Boolean(shop) && draftAddressSignature !== shopAddressSignature
+  const geocodeProviderLabel = formatGeocodeProviderLabel(geocodeProvider)
+  const geocodePrecisionLabel = formatLocationPrecisionLabel(geocodePrecision, geocodeProvider)
+  const geocodedAtLabel = formatGeocodedTimestamp(geocodedAt)
+  const trimmedFormattedAddress = formattedAddress.trim()
+  const showFormattedAddressDetails =
+    Boolean(trimmedFormattedAddress) && trimmedFormattedAddress !== currentAddressLabel
+  const showLocationDiagnostics =
+    locationDraftChanged ||
+    latitude !== null ||
+    longitude !== null ||
+    Boolean(trimmedFormattedAddress) ||
+    Boolean(geocodePrecision) ||
+    Boolean(geocodeProvider) ||
+    Boolean(geocodedAt)
 
   return (
     <div className="space-y-4">
@@ -999,10 +1091,33 @@ function ShopSettings({
               {success && <span className="text-sm text-[var(--color-text)]">Salvo com sucesso!</span>}
             </div>
           )}
-          {(latitude !== null && longitude !== null) && (
-            <p className="text-xs text-[var(--color-text-muted)]">
-              Coordenadas atuais: {latitude.toFixed(6)}, {longitude.toFixed(6)}
-            </p>
+          {showLocationDiagnostics && (
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text)]">
+                Status da localizacao
+              </p>
+              {locationDraftChanged ? (
+                <p className="mt-1 text-xs text-[var(--color-primary)]">
+                  O endereco foi alterado neste formulario. Ao salvar, o sistema vai limpar o ponto antigo e recalcular o minimapa.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                  {geocodePrecisionLabel}
+                  {geocodeProviderLabel ? ` • ${geocodeProviderLabel}` : ''}
+                  {geocodedAtLabel ? ` • atualizado em ${geocodedAtLabel}` : ''}
+                </p>
+              )}
+              {(latitude !== null && longitude !== null) && (
+                <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                  Coordenadas atuais: {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                </p>
+              )}
+              {showFormattedAddressDetails && (
+                <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                  Endereco confirmado pelo geocoder: {trimmedFormattedAddress}
+                </p>
+              )}
+            </div>
           )}
         </form>
       </Card>
@@ -1181,7 +1296,15 @@ function DayRow({
   )
 }
 
-function TimeOffSettings({ shopId, isAdmin }: { shopId: string | undefined; isAdmin: boolean }) {
+function TimeOffSettings({
+  shopId,
+  timeZone,
+  isAdmin,
+}: {
+  shopId: string | undefined
+  timeZone: string
+  isAdmin: boolean
+}) {
   const [timeOffs, setTimeOffs] = useState<(TimeOff & { professionals: { name: string } | null })[]>([])
   const [professionals, setProfessionals] = useState<Professional[]>([])
   const [loading, setLoading] = useState(true)
@@ -1239,8 +1362,14 @@ function TimeOffSettings({ shopId, isAdmin }: { shopId: string | undefined; isAd
 
     setFormLoading(true)
 
-    const startAt = new Date(`${formStartDate}T${formStartTime}:00`).toISOString()
-    const endAt = new Date(`${formEndDate}T${formEndTime}:00`).toISOString()
+    const startAt = zonedDateTimeToUtcIso(formStartDate, formStartTime, timeZone)
+    const endAt = zonedDateTimeToUtcIso(formEndDate, formEndTime, timeZone)
+
+    if (new Date(endAt).getTime() <= new Date(startAt).getTime()) {
+      setFormError('O fim do bloqueio precisa ser depois do início.')
+      setFormLoading(false)
+      return
+    }
 
     const { error } = await supabase.from('time_off').insert({
       shop_id: shopId,
@@ -1302,7 +1431,7 @@ function TimeOffSettings({ shopId, isAdmin }: { shopId: string | undefined; isAd
                     {to.professionals?.name || 'Toda a barbearia'}
                   </p>
                   <p className="text-xs text-[var(--color-text-muted)]">
-                    {format(parseISO(to.start_at), 'dd/MM/yyyy HH:mm')} — {format(parseISO(to.end_at), 'dd/MM/yyyy HH:mm')}
+                    {formatShortDateTimeInTimeZone(to.start_at, timeZone)} — {formatShortDateTimeInTimeZone(to.end_at, timeZone)}
                   </p>
                   {to.reason && (
                     <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{to.reason}</p>
@@ -1467,4 +1596,3 @@ function MembersSettings({ shopId, isAdmin }: { shopId: string | undefined; isAd
     </Card>
   )
 }
-

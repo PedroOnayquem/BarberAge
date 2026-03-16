@@ -121,8 +121,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const meta = (authUser?.user_metadata || {}) as Record<string, unknown>
       const isClientFromMetadata =
         meta.role === 'client' || meta.account_type === 'client'
+      const hasClientIdentity = isClientFromMetadata || clientUsers.length > 0
       const globalClientProfile: ClientGlobalProfile | null =
-        isClientFromMetadata || typeof meta.name === 'string' || typeof meta.phone === 'string'
+        hasClientIdentity
           ? {
               name: typeof meta.name === 'string' ? meta.name : null,
               phone: typeof meta.phone === 'string' ? meta.phone : null,
@@ -162,13 +163,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setClientGlobalProfile(globalClientProfile)
       }
 
-      // If not a shop member, client role is defined by metadata profile or old shop-linked client.
-      if (members.length === 0 && (globalClientProfile || clientUsers.length > 0)) {
+      // If not a shop member, client role only exists when there is an explicit client marker.
+      if (members.length === 0 && hasClientIdentity) {
         setUserRole('client')
       }
 
       // If neither, leave role as null (new user, needs onboarding)
-      if (members.length === 0 && !globalClientProfile && clientUsers.length === 0) {
+      if (members.length === 0 && !hasClientIdentity) {
         setUserRole(null)
       }
     } finally {

@@ -42,6 +42,8 @@ const GEO_REQUEST_TIMEOUT_MS = 12000
 const WATCH_STALE_TIMEOUT_MS = 20000
 const IP_FALLBACK_TIMEOUT_MS = 4000
 const ROUTE_REQUEST_TIMEOUT_MS = 12000
+const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+const CARTO_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
 const GEO_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
   timeout: GEO_REQUEST_TIMEOUT_MS,
@@ -297,6 +299,7 @@ export function DirectionsMapModal({
   const [mapReady, setMapReady] = useState(false)
   const [mapRenderKey, setMapRenderKey] = useState(0)
   const [tileVariant, setTileVariant] = useState<'osm' | 'carto'>('osm')
+  const [tileStatus, setTileStatus] = useState<'ok' | 'fallback' | 'failed'>('ok')
   const [isFollowingUser, setIsFollowingUser] = useState(true)
   const [mapWasMoved, setMapWasMoved] = useState(false)
   const [devSimulationEnabled, setDevSimulationEnabled] = useState(false)
@@ -659,6 +662,8 @@ export function DirectionsMapModal({
     lastRouteOriginRef.current = null
     lastFlyAtRef.current = 0
     setMapReady(false)
+    setTileVariant('osm')
+    setTileStatus('ok')
     setLocationStatus('idle')
     setRouteStatus('idle')
     setPermissionApiState('unavailable')
@@ -847,15 +852,15 @@ export function DirectionsMapModal({
   }, [shopCoords])
 
   const googleMapsUrl = useMemo(() => {
+    const routeSearchAddress = encodeURIComponent((shopFormattedAddress || shopAddress || '').trim())
     if (shopCoords && userCoords) {
       return `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${shopCoords.lat},${shopCoords.lng}&travelmode=driving`
     }
     if (shopCoords) {
       return `https://www.google.com/maps/dir/?api=1&destination=${shopCoords.lat},${shopCoords.lng}&travelmode=driving`
     }
-    const query = encodeURIComponent(shopAddress)
-    return `https://www.google.com/maps/search/?api=1&query=${query}`
-  }, [shopAddress, shopCoords, userCoords])
+    return `https://www.google.com/maps/search/?api=1&query=${routeSearchAddress}`
+  }, [shopAddress, shopCoords, shopFormattedAddress, userCoords])
 
   const wazeUrl = useMemo(() => {
     if (!shopCoords) return ''
@@ -875,15 +880,30 @@ export function DirectionsMapModal({
   const tileConfig = useMemo(() => {
     if (tileVariant === 'carto') {
       return {
-        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        url: CARTO_TILE_URL,
         label: 'Layer: Clean',
       }
     }
     return {
-      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      url: OSM_TILE_URL,
       label: 'Layer: OSM',
     }
   }, [tileVariant])
+
+  function handleToggleTileVariant() {
+    setTileVariant((value) => (value === 'osm' ? 'carto' : 'osm'))
+    setTileStatus('ok')
+  }
+
+  function handleTileLayerError() {
+    setMapReady(true)
+    if (tileVariant === 'osm') {
+      setTileVariant('carto')
+      setTileStatus('fallback')
+      return
+    }
+    setTileStatus('failed')
+  }
 
   function handleRecenter() {
     const map = mapRef.current
@@ -975,7 +995,7 @@ export function DirectionsMapModal({
           </div>
 
           <button
-            onClick={() => setTileVariant((value) => (value === 'osm' ? 'carto' : 'osm'))}
+            onClick={handleToggleTileVariant}
             className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-slate-900/80 text-white shadow-[0_6px_22px_rgba(2,6,23,0.45)] backdrop-blur transition-colors hover:bg-slate-800/90"
             aria-label="Alternar camada"
             title={tileConfig.label}
@@ -998,8 +1018,10 @@ export function DirectionsMapModal({
                 whenReady={() => setMapReady(true)}
               >
                 <TileLayer
+                  key={tileConfig.url}
                   attribution='&copy; OpenStreetMap contributors'
                   url={tileConfig.url}
+                  eventHandlers={{ tileerror: handleTileLayerError }}
                 />
                 <Marker position={[shopCoords!.lat, shopCoords!.lng]} icon={shopMarkerIcon} />
                 {userCoords && <Marker position={[userCoords.lat, userCoords.lng]} icon={userArrowIcon} />}
@@ -1027,6 +1049,12 @@ export function DirectionsMapModal({
 
               {!mapReady && (
                 <div className="pointer-events-none absolute inset-0 animate-pulse bg-slate-900/55" />
+              )}
+
+              {tileStatus === 'failed' && (
+                <div className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center bg-slate-950/35 px-6 text-center text-sm text-slate-100 backdrop-blur-[1px]">
+                  A camada do mapa falhou nesta conexão. Use Google Maps ou Waze para navegar sem depender do mapa interno.
+                </div>
               )}
 
               {(loadingLocation || loadingRoute) && (
@@ -1312,6 +1340,16 @@ export function DirectionsMapModal({
                 )}
                 {routeError && (
                   <p className="mt-2 text-xs text-slate-300">{routeError}</p>
+                )}
+                {tileStatus === 'fallback' && (
+                  <p className="mt-2 text-xs text-slate-300">
+                    Camada principal indisponível no momento. Exibindo mapa alternativo.
+                  </p>
+                )}
+                {tileStatus === 'failed' && (
+                  <p className="mt-2 text-xs text-amber-200">
+                    O mapa interno não carregou nesta conexão, mas a rota externa continua disponível.
+                  </p>
                 )}
                 {usingApproximateLocation && (
                   <p className="mt-2 text-xs text-amber-200">Usando localizacao aproximada por IP.</p>

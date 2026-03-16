@@ -12,6 +12,12 @@ import { TimePickerField } from '../components/ui/TimePickerField'
 import { Card } from '../components/ui/Card'
 import { translateError } from '../lib/errorMessages'
 import {
+  formatCalendarDate,
+  formatTimeInTimeZone,
+  getTimeZoneDateKey,
+  getUtcRangeForLocalWeek,
+} from '../lib/timezone'
+import {
   format,
   startOfWeek,
   endOfWeek,
@@ -19,7 +25,6 @@ import {
   addWeeks,
   subWeeks,
   isSameDay,
-  parseISO,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { Tables } from '../types/database'
@@ -32,6 +37,7 @@ type Appointment = Tables<'appointments'> & {
 type Professional = Tables<'professionals'>
 type Service = Tables<'services'>
 type Client = Tables<'clients'>
+type Slot = { slot_start: string; slot_end: string }
 
 const statusMap: Record<string, { label: string; variant: 'default' | 'success' | 'warning' | 'danger' | 'info' }> = {
   pending: { label: 'Pendente', variant: 'warning' },
@@ -67,30 +73,43 @@ export function AppointmentsPage() {
   const [formNotes, setFormNotes] = useState('')
   const [formError, setFormError] = useState('')
   const [formLoading, setFormLoading] = useState(false)
+  const [availableSlots, setAvailableSlots] = useState<Slot[]>([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState('')
+
+  const shopTimeZone = currentShop?.timezone || 'America/Sao_Paulo'
 
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i))
   }, [currentWeekStart])
 
   const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 })
+  const selectedServices = useMemo(
+    () => services.filter((service) => formServiceIds.includes(service.id)),
+    [services, formServiceIds]
+  )
+  const totalDurationMinutes = useMemo(
+    () => selectedServices.reduce((sum, service) => sum + service.duration_minutes, 0),
+    [selectedServices]
+  )
+  const availableTimeOptions = useMemo(() => {
+    const seenTimes = new Set<string>()
 
-  useEffect(() => {
-    if (currentShop) loadData()
-  }, [currentShop, currentWeekStart])
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 640px)')
-    const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches)
-    setIsMobile(mediaQuery.matches)
-
-    if (typeof mediaQuery.addEventListener === 'function') {
-      mediaQuery.addEventListener('change', onChange)
-      return () => mediaQuery.removeEventListener('change', onChange)
-    }
-
-    mediaQuery.addListener(onChange)
-    return () => mediaQuery.removeListener(onChange)
-  }, [])
+    return availableSlots
+      .map((slot) => formatTimeInTimeZone(slot.slot_start, shopTimeZone))
+      .filter((time) => {
+        if (seenTimes.has(time)) return false
+        seenTimes.add(time)
+        return true
+      })
+  }, [availableSlots, shopTimeZone])
+  const selectedSlot = useMemo(
+    () =>
+      availableSlots.find((slot) => formatTimeInTimeZone(slot.slot_start, shopTimeZone) === formTime) ?? null,
+    [availableSlots, formTime, shopTimeZone]
+  )
+  const canLoadSlots = !!currentShop && !!formProfessionalId && !!formDate && totalDurationMinutes > 0
+  const selectedDateKey = formatCalendarDate(selectedDate)
 
   function getWeekdayLabel(day: Date) {
     const label = isMobile
@@ -104,13 +123,15 @@ export function AppointmentsPage() {
     if (!currentShop) return
     setLoading(true)
 
+    const weekRange = getUtcRangeForLocalWeek(currentWeekStart, shopTimeZone)
+
     const [aptsRes, profsRes, srvsRes, clientsRes] = await Promise.all([
       supabase
         .from('appointments')
         .select('*, clients(name), professionals(name), appointment_services(services(name))')
         .eq('shop_id', currentShop.id)
-        .gte('start_at', currentWeekStart.toISOString())
-        .lte('start_at', weekEnd.toISOString())
+        .gte('start_at', weekRange.startIso)
+        .lt('start_at', weekRange.endExclusiveIso)
         .order('start_at'),
       supabase.from('professionals').select('*').eq('shop_id', currentShop.id).eq('active', true),
       supabase.from('services').select('*').eq('shop_id', currentShop.id).eq('active', true),
@@ -132,8 +153,75 @@ export function AppointmentsPage() {
     setFormTime('')
     setFormNotes('')
     setFormError('')
+    setAvailableSlots([])
+    setSlotsError('')
     setModalOpen(true)
   }
+
+  async function loadAvailableSlots() {
+    if (!currentShop || !formProfessionalId || !formDate || totalDurationMinutes <= 0) {
+      setAvailableSlots([])
+      setSlotsError('')
+      setSlotsLoading(false)
+      return
+    }
+
+    setSlotsLoading(true)
+    setSlotsError('')
+
+    const { data, error } = await supabase.rpc('get_available_slots', {
+      p_shop_id: currentShop.id,
+      p_professional_id: formProfessionalId,
+      p_date: formDate,
+      p_duration_minutes: totalDurationMinutes,
+    })
+
+    if (error) {
+      setAvailableSlots([])
+      setSlotsError('Não foi possível carregar os horários disponíveis agora.')
+      setSlotsLoading(false)
+      return
+    }
+
+    const nextSlots = (Array.isArray(data) ? data : []) as Slot[]
+    setAvailableSlots(nextSlots)
+    setSlotsLoading(false)
+
+    if (formTime && !nextSlots.some((slot) => formatTimeInTimeZone(slot.slot_start, shopTimeZone) === formTime)) {
+      setFormTime('')
+    }
+  }
+
+  useEffect(() => {
+    if (currentShop) void loadData()
+  }, [currentShop, currentWeekStart])
+
+  useEffect(() => {
+    if (!modalOpen) return
+    if (!canLoadSlots) {
+      setAvailableSlots([])
+      setSlotsError('')
+      setSlotsLoading(false)
+      setFormTime('')
+      return
+    }
+
+    void loadAvailableSlots()
+  }, [modalOpen, canLoadSlots, currentShop?.id, formDate, formProfessionalId, totalDurationMinutes, shopTimeZone])
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 640px)')
+    const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches)
+    setIsMobile(mediaQuery.matches)
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', onChange)
+      return () => mediaQuery.removeEventListener('change', onChange)
+    }
+
+    mediaQuery.addListener(onChange)
+    return () => mediaQuery.removeListener(onChange)
+  }, [])
 
   async function handleCreateAppointment() {
     if (!currentShop) return
@@ -144,15 +232,18 @@ export function AppointmentsPage() {
       return
     }
 
-    setFormLoading(true)
+    if (!selectedSlot) {
+      setFormError('Escolha um horário disponível para este profissional e os serviços selecionados.')
+      return
+    }
 
-    const startAt = new Date(`${formDate}T${formTime}:00`)
+    setFormLoading(true)
 
     const { error: aptError } = await supabase.rpc('create_appointment_safe', {
       p_shop_id: currentShop.id,
       p_client_id: formClientId,
       p_professional_id: formProfessionalId,
-      p_start_at: startAt.toISOString(),
+      p_start_at: selectedSlot.slot_start,
       p_service_ids: formServiceIds,
       p_notes: formNotes || null,
     })
@@ -164,7 +255,8 @@ export function AppointmentsPage() {
         lowerMessage.includes('horario indisponivel') ||
         lowerMessage.includes('conflito')
       ) {
-        setFormError('Conflito de horário! Este profissional já tem um agendamento nesse período.')
+        setFormError('Este horário está indisponível por conflito ou bloqueio na agenda. Escolha outro.')
+        await loadAvailableSlots()
       } else {
         setFormError(translateError(aptError.message))
       }
@@ -192,7 +284,7 @@ export function AppointmentsPage() {
   }
 
   const dayAppointments = appointments.filter((a) =>
-    isSameDay(parseISO(a.start_at), selectedDate)
+    getTimeZoneDateKey(a.start_at, shopTimeZone) === selectedDateKey
   )
 
   if (loading) {
@@ -248,7 +340,8 @@ export function AppointmentsPage() {
           {weekDays.map((day) => {
             const isSelected = isSameDay(day, selectedDate)
             const isToday = isSameDay(day, new Date())
-            const dayApts = appointments.filter((a) => isSameDay(parseISO(a.start_at), day))
+            const dayKey = formatCalendarDate(day)
+            const dayApts = appointments.filter((a) => getTimeZoneDateKey(a.start_at, shopTimeZone) === dayKey)
             return (
               <button
                 key={day.toISOString()}
@@ -305,10 +398,10 @@ export function AppointmentsPage() {
                   <div className="flex items-center gap-4">
                     <div className="text-center">
                       <p className="text-lg font-bold text-[var(--color-text)]">
-                        {format(parseISO(apt.start_at), 'HH:mm')}
+                        {formatTimeInTimeZone(apt.start_at, shopTimeZone)}
                       </p>
                       <p className="text-xs text-[var(--color-text-muted)]">
-                        {format(parseISO(apt.end_at), 'HH:mm')}
+                        {formatTimeInTimeZone(apt.end_at, shopTimeZone)}
                       </p>
                     </div>
                     <div>
@@ -341,12 +434,14 @@ export function AppointmentsPage() {
           )}
 
           <Select label="Cliente" value={formClientId} onChange={(e) => setFormClientId(e.target.value)} required>
+            <option value="">Selecione um cliente</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </Select>
 
           <Select label="Profissional" value={formProfessionalId} onChange={(e) => setFormProfessionalId(e.target.value)} required>
+            <option value="">Selecione um profissional</option>
             {professionals.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -386,7 +481,24 @@ export function AppointmentsPage() {
               onChange={setFormDate}
               minDate={new Date()}
             />
-            <TimePickerField label="Horário" value={formTime} onChange={setFormTime} />
+            <TimePickerField
+              label="Horário"
+              value={formTime}
+              onChange={setFormTime}
+              options={availableTimeOptions}
+              disabled={!canLoadSlots || slotsLoading || availableTimeOptions.length === 0}
+              helperText={
+                !canLoadSlots
+                  ? 'Selecione profissional e serviços para carregar os horários.'
+                  : slotsLoading
+                  ? 'Carregando horários disponíveis...'
+                  : slotsError
+                  ? slotsError
+                  : availableTimeOptions.length === 0
+                  ? 'Nenhum horário disponível para esta combinação.'
+                  : 'Horários livres calculados pela agenda da barbearia.'
+              }
+            />
           </div>
 
           <Textarea
@@ -408,7 +520,7 @@ export function AppointmentsPage() {
         {selectedAppointment && (
           <div className="space-y-3">
             <p className="text-sm text-[var(--color-text-muted)]">
-              {selectedAppointment.clients?.name} — {format(parseISO(selectedAppointment.start_at), 'HH:mm')}
+              {selectedAppointment.clients?.name} — {formatTimeInTimeZone(selectedAppointment.start_at, shopTimeZone)}
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {Object.entries(statusMap).map(([key, val]) => (
@@ -428,5 +540,3 @@ export function AppointmentsPage() {
     </div>
   )
 }
-
-

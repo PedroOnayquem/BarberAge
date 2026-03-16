@@ -251,6 +251,8 @@ function serializeDraft(state: WizardState): WizardDraftSnapshot {
   delete draftData.accountConfirmPassword
   delete draftData.logoFile
   delete draftData.logoPreviewUrl
+  draftData.accountEmail =
+    typeof draftData.accountEmail === 'string' ? draftData.accountEmail.trim().toLowerCase() : ''
 
   return {
     step: state.step,
@@ -259,28 +261,8 @@ function serializeDraft(state: WizardState): WizardDraftSnapshot {
   }
 }
 
-function readDraftFromStorage(): WizardDraftSnapshot | null {
-  try {
-    const raw = window.localStorage.getItem(SHOP_SIGNUP_DRAFT_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<WizardDraftSnapshot>
-    if (!parsed || typeof parsed !== 'object') return null
-    if (!parsed.data || typeof parsed.data !== 'object') return null
-    const parsedStep = Number(parsed.step)
-    if (!Number.isFinite(parsedStep)) return null
-    return {
-      step: clampStep(parsedStep),
-      data: parsed.data as DraftData,
-      savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : new Date().toISOString(),
-    }
-  } catch {
-    return null
-  }
-}
-
-function hasDraftContent(data: WizardData) {
+function hasPersistableDraftContent(data: WizardData) {
   return Boolean(
-    data.accountEmail.trim() ||
     data.businessType ||
     normalizeCep(data.cep) ||
     data.state.trim() ||
@@ -291,6 +273,7 @@ function hasDraftContent(data: WizardData) {
     data.complement.trim() ||
     data.latitude !== null ||
     data.longitude !== null ||
+    data.mapConfirmed ||
     data.ownerName.trim() ||
     normalizePhone(data.phone) ||
     data.shopName.trim() ||
@@ -307,6 +290,54 @@ function hasDraftContent(data: WizardData) {
     data.schedule.sundayOpen ||
     data.schedule.sundayStart !== '09:00' ||
     data.schedule.sundayEnd !== '13:00'
+  )
+}
+
+function shouldPersistDraft(state: Pick<WizardState, 'step' | 'data'>) {
+  return state.step > 1 || hasPersistableDraftContent(state.data)
+}
+
+function readDraftFromStorage(): WizardDraftSnapshot | null {
+  try {
+    const raw = window.localStorage.getItem(SHOP_SIGNUP_DRAFT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<WizardDraftSnapshot>
+    if (!parsed || typeof parsed !== 'object') return null
+    if (!parsed.data || typeof parsed.data !== 'object') return null
+    const parsedDraftData = parsed.data as Partial<WizardData>
+    const parsedDraftEmail =
+      typeof parsedDraftData.accountEmail === 'string' ? parsedDraftData.accountEmail.trim().toLowerCase() : ''
+    const parsedStep = Number(parsed.step)
+    if (!Number.isFinite(parsedStep)) return null
+    const hydratedData: WizardData = {
+      ...createInitialData(),
+      ...parsedDraftData,
+      accountEmail: parsedDraftEmail,
+      accountPassword: '',
+      accountConfirmPassword: '',
+      logoFile: null,
+      logoPreviewUrl: null,
+    }
+    if (!isValidEmail(hydratedData.accountEmail)) return null
+    const normalizedStep = clampStep(parsedStep)
+    if (!shouldPersistDraft({ step: normalizedStep, data: hydratedData })) return null
+    return {
+      step: normalizedStep,
+      data: {
+        ...(parsedDraftData as DraftData),
+        accountEmail: hydratedData.accountEmail,
+      },
+      savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : new Date().toISOString(),
+    }
+  } catch {
+    return null
+  }
+}
+
+function hasDraftContent(data: WizardData) {
+  return Boolean(
+    data.accountEmail.trim() ||
+    hasPersistableDraftContent(data)
   )
 }
 
@@ -514,18 +545,16 @@ function resolveFirstInvalidStep(errors: WizardErrors): WizardStep {
 
 export function useWizardState() {
   const [state, dispatch] = useReducer(reducer, undefined, createInitialState)
-  const [pendingDraft, setPendingDraft] = useState<WizardDraftSnapshot | null>(null)
-  const [draftReady, setDraftReady] = useState(false)
-
-  useEffect(() => {
-    const existingDraft = readDraftFromStorage()
-    setPendingDraft(existingDraft)
-    setDraftReady(true)
-  }, [])
+  const [pendingDraft, setPendingDraft] = useState<WizardDraftSnapshot | null>(() => readDraftFromStorage())
+  const draftReady = true
 
   useEffect(() => {
     if (!draftReady || pendingDraft) return
-    if (state.step === 1 && !hasDraftContent(state.data)) {
+    if (!hasDraftContent(state.data)) {
+      window.localStorage.removeItem(SHOP_SIGNUP_DRAFT_KEY)
+      return
+    }
+    if (!shouldPersistDraft(state)) {
       window.localStorage.removeItem(SHOP_SIGNUP_DRAFT_KEY)
       return
     }

@@ -11,6 +11,7 @@ import { ShopLocationMap } from '../../components/cliente/marketplace/ShopLocati
 import { getSignedAvatarUrl, SHOP_AVATARS_BUCKET } from '../../lib/avatarStorage'
 import { translateError } from '../../lib/errorMessages'
 import { normalizePhone } from '../../lib/phone'
+import { formatTimeInTimeZone } from '../../lib/timezone'
 import type { Tables } from '../../types/database'
 
 type Shop = Tables<'shops'>
@@ -44,9 +45,18 @@ export function ClientBarbershopBookingPage() {
   const [bookingError, setBookingError] = useState('')
   const [bookingSuccess, setBookingSuccess] = useState(false)
 
-  useEffect(() => {
-    if (slug) void loadPageData(slug)
-  }, [slug])
+  function resetBookingSelectionState() {
+    setSelectedService(null)
+    setSelectedProfessional(null)
+    setSelectedDate(startOfDay(new Date()))
+    setSlots([])
+    setSelectedSlot(null)
+    setSlotsLoading(false)
+    setSlotsError('')
+    setBookingLoading(false)
+    setBookingError('')
+    setBookingSuccess(false)
+  }
 
   async function fetchShopCandidatesBySlug(shopSlug: string): Promise<ShopCandidate[]> {
     const [shopsRes, barbershopsRes] = await Promise.all([
@@ -107,9 +117,11 @@ export function ClientBarbershopBookingPage() {
 
   async function loadPageData(shopSlug: string) {
     setLoading(true)
-    setBookingError('')
-    setBookingSuccess(false)
+    resetBookingSelectionState()
     setCatalogError('')
+    setAvatarUrl(null)
+    setServices([])
+    setProfessionals([])
 
     const candidates = await fetchShopCandidatesBySlug(shopSlug)
     if (candidates.length === 0) {
@@ -158,6 +170,21 @@ export function ClientBarbershopBookingPage() {
     setAvatarUrl(signed)
     setLoading(false)
   }
+
+  useEffect(() => {
+    if (!slug) {
+      resetBookingSelectionState()
+      setShop(null)
+      setAvatarUrl(null)
+      setServices([])
+      setProfessionals([])
+      setCatalogError('Não foi possível localizar esta barbearia agora.')
+      setLoading(false)
+      return
+    }
+
+    void loadPageData(slug)
+  }, [slug])
 
   async function loadSlots(params: { date: Date; professional: Professional; service: Service }) {
     if (!shop) return
@@ -477,7 +504,7 @@ export function ClientBarbershopBookingPage() {
                         : 'border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
                     }`}
                   >
-                    {format(new Date(slot.slot_start), 'HH:mm')}
+                    {formatTimeInTimeZone(slot.slot_start, shop?.timezone || 'America/Sao_Paulo')}
                   </button>
                 )
               })}

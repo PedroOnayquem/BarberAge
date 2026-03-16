@@ -1,5 +1,6 @@
 import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
+import { TimePickerField } from '../../ui/TimePickerField'
 import {
   TIMEZONE_OPTIONS,
   type WizardData,
@@ -56,20 +57,23 @@ function ScheduleRow({
       </div>
 
       {open ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Input
+        <div className="grid gap-2 sm:grid-cols-[minmax(180px,220px)_auto_minmax(180px,220px)] sm:items-center">
+          <TimePickerField
             label="Inicio"
-            type="time"
             value={start}
-            onChange={(event) => onStartChange(event.target.value)}
+            onChange={onStartChange}
             error={startError}
+            columns={3}
+            title={`Selecionar inicio - ${label}`}
           />
-          <Input
+          <span className="px-1 text-center text-sm text-[#94a3b8]">ate</span>
+          <TimePickerField
             label="Fim"
-            type="time"
             value={end}
-            onChange={(event) => onEndChange(event.target.value)}
+            onChange={onEndChange}
             error={endError}
+            columns={3}
+            title={`Selecionar fim - ${label}`}
           />
         </div>
       ) : (

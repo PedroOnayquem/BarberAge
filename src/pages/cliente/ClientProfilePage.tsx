@@ -180,7 +180,7 @@ export function ClientProfilePage() {
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    navigate('/login')
+    navigate('/register')
   }
 
   return (

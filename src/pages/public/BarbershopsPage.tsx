@@ -3,13 +3,12 @@ import { Link } from 'react-router-dom'
 import { MapPin, Scissors } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getSignedAvatarUrl, SHOP_AVATARS_BUCKET } from '../../lib/avatarStorage'
-import type { Tables } from '../../types/database'
+import type { Database } from '../../types/database'
 
-type Shop = Tables<'shops'>
-type Service = Tables<'services'>
-type Professional = Tables<'professionals'>
+type PublicShopRow =
+  Database['public']['Functions']['list_public_barbershops_with_status']['Returns'][number]
 
-type ShopCard = Shop & {
+type ShopCard = PublicShopRow & {
   description: string
   serviceCount: number
   professionalCount: number
@@ -21,75 +20,65 @@ export function BarbershopsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    loadShops()
-  }, [])
-
   async function loadShops() {
     setLoading(true)
     setError('')
 
-    const [shopsRes, servicesRes, professionalsRes] = await Promise.all([
-      supabase
-        .from('barbershops')
-        .select('id, name, slug, address, avatar_url, phone, timezone, created_at')
-        .order('name'),
-      supabase.from('services').select('*').eq('active', true),
-      supabase.from('professionals').select('*').eq('active', true),
-    ])
+    const { data: primaryRows, error: primaryError } = await supabase.rpc(
+      'list_public_barbershops_with_status_filtered',
+      { p_city: null, p_state: null }
+    )
 
-    if (shopsRes.error) {
+    let rows = (primaryRows || []) as PublicShopRow[]
+    if (primaryError) {
+      const { data: fallbackRows, error: fallbackError } = await supabase.rpc('list_public_barbershops_with_status')
+      if (fallbackError || !fallbackRows) {
+        if (import.meta.env.DEV) {
+          console.error('[public-barbershops] marketplace load error', {
+            primaryError,
+            fallbackError,
+          })
+        }
+        setShops([])
+        setError('Não foi possível carregar as barbearias. Verifique as políticas de leitura do marketplace.')
+        setLoading(false)
+        return
+      }
+
+      rows = fallbackRows as PublicShopRow[]
+      setError('Filtro indisponível no momento. Exibindo listagem padrão.')
+    }
+
+    const dedupedShops = Array.from(new Map(rows.map((shop) => [shop.id, shop])).values())
+    if (dedupedShops.length === 0) {
       setShops([])
-      setError('Não foi possível carregar as barbearias. Verifique as políticas de leitura do marketplace.')
       setLoading(false)
       return
     }
 
-    const rawShops = (shopsRes.data || []) as Shop[]
-    const dedupedShops = Array.from(new Map(rawShops.map((shop) => [shop.id, shop])).values())
-    const activeServices = (servicesRes.data || []) as Service[]
-    const activeProfessionals = (professionalsRes.data || []) as Professional[]
-    const canFilterByCatalog = !servicesRes.error && !professionalsRes.error
-
-    const serviceCountByShop = activeServices.reduce<Record<string, number>>((acc, service) => {
-      acc[service.shop_id] = (acc[service.shop_id] || 0) + 1
-      return acc
-    }, {})
-    const professionalCountByShop = activeProfessionals.reduce<Record<string, number>>((acc, professional) => {
-      acc[professional.shop_id] = (acc[professional.shop_id] || 0) + 1
-      return acc
-    }, {})
-
-    // Consideramos "barbearia ativa" quando há pelo menos 1 serviço e 1 profissional ativo.
-    const activeShops = canFilterByCatalog
-      ? dedupedShops.filter((shop) => {
-          return (serviceCountByShop[shop.id] || 0) > 0 && (professionalCountByShop[shop.id] || 0) > 0
-        })
-      : dedupedShops
-    const visibleShops =
-      canFilterByCatalog && activeShops.length === 0 && dedupedShops.length > 0 ? dedupedShops : activeShops
-
     const withAvatar = await Promise.all(
-      visibleShops.map(async (shop) => {
+      dedupedShops.map(async (shop) => {
         const avatarSignedUrl = await getSignedAvatarUrl(SHOP_AVATARS_BUCKET, shop.avatar_url)
         return {
           ...shop,
           avatarSignedUrl,
-          serviceCount: serviceCountByShop[shop.id] || 0,
-          professionalCount: professionalCountByShop[shop.id] || 0,
+          serviceCount: shop.services_count || 0,
+          professionalCount: shop.professionals_count || 0,
           description: 'Atendimento profissional com agendamento online e horários flexíveis.',
         }
       })
     )
 
     setShops(withAvatar)
-    if (!canFilterByCatalog) {
-      setError('Catálogo parcial: não foi possível validar serviços/profissionais ativos para todas as barbearias.')
-    } else if (activeShops.length === 0 && rawShops.length > 0) {
-      setError('Nenhuma barbearia com catálogo ativo. Exibindo barbearias cadastradas em modo de configuração.')
+    if (withAvatar.every((shop) => !shop.can_book)) {
+      setError('Nenhuma barbearia pronta para agendamento. Exibindo barbearias cadastradas em modo de configuração.')
     }
     setLoading(false)
   }
+
+  useEffect(() => {
+    void loadShops()
+  }, [])
 
   const empty = useMemo(() => !loading && shops.length === 0, [loading, shops.length])
 
@@ -154,7 +143,7 @@ export function BarbershopsPage() {
                   {shop.address || 'Endereço não informado'}
                 </p>
 
-                {shop.serviceCount > 0 && shop.professionalCount > 0 ? (
+                {shop.can_book ? (
                   <Link
                     to={`/barbearias/${shop.slug}`}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)]"

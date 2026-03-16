@@ -289,11 +289,9 @@ body {
 }
 
 .barber-datepicker-popover {
-  position: absolute;
-  z-index: 60;
-  top: calc(100% + 0.5rem);
-  left: 0;
-  width: min(100%, 320px);
+  position: fixed;
+  z-index: 9999;
+  width: min(340px, calc(100vw - 24px));
 }
 
 .barber-timepicker-popover {

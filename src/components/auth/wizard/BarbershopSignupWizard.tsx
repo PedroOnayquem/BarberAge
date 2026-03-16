@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { CheckCircle2, Scissors } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
 import { translateError } from '../../../lib/errorMessages'
-import { buildAddressLine, normalizeCep } from '../../../lib/location'
+import { buildAddressLine, buildReadableAddress, normalizeCep } from '../../../lib/location'
 import { caretIndexFromDigitCount, countDigitsBeforeCaret, formatPhone, normalizePhone } from '../../../lib/phone'
 import { supabase } from '../../../lib/supabase'
 import { uploadShopAvatar } from '../../../lib/avatarStorage'
@@ -29,6 +29,11 @@ type SupabaseMutationError = {
   code?: string
   status?: number
 } | null
+
+interface AuthAccountStatus {
+  accountExists: boolean
+  emailConfirmed: boolean
+}
 
 type InsertMode = 'extended' | 'full' | 'legacy'
 type InsertRelation = 'barbershops' | 'shops'
@@ -78,6 +83,35 @@ function isAlreadyRegisteredError(message: string): boolean {
     normalized.includes('already registered') ||
     normalized.includes('already exists') ||
     normalized.includes('ja esta cadastrado')
+  )
+}
+
+function shouldTryExistingAccountFallback(status?: number, code?: string, message?: string) {
+  if (status === 429) return true
+  if ((code || '').toLowerCase() === 'user_already_exists') return true
+  const normalized = (message || '').toLowerCase()
+  return (
+    isAlreadyRegisteredError(message || '') ||
+    (status === 422 && (
+      normalized.includes('already') ||
+      normalized.includes('registered') ||
+      normalized.includes('exists')
+    ))
+  )
+}
+
+function isEmailNotConfirmedError(code?: string, message?: string) {
+  if ((code || '').toLowerCase() === 'email_not_confirmed') return true
+  return (message || '').toLowerCase().includes('email not confirmed')
+}
+
+function isInvalidCredentialsError(code?: string, message?: string) {
+  const normalizedCode = (code || '').toLowerCase()
+  const normalizedMessage = (message || '').toLowerCase()
+  return (
+    normalizedCode === 'invalid_credentials' ||
+    normalizedCode === 'invalid_login_credentials' ||
+    normalizedMessage.includes('invalid login credentials')
   )
 }
 
@@ -201,9 +235,44 @@ async function resolveAuthenticatedUser() {
   return data.user
 }
 
+async function fetchAuthAccountStatus(email: string): Promise<AuthAccountStatus | null> {
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!normalizedEmail) {
+    return {
+      accountExists: false,
+      emailConfirmed: false,
+    }
+  }
+
+  const { data, error } = await (supabase as typeof supabase & {
+    rpc: (fn: string, args: Record<string, unknown>) => {
+      single: () => Promise<{ data: unknown; error: { code?: string; message?: string } | null }>
+    }
+  })
+    .rpc('get_auth_account_status', { p_email: normalizedEmail })
+    .single()
+
+  if (error) {
+    if (import.meta.env.DEV) {
+      console.error('[create-shop] get_auth_account_status failed', {
+        code: error.code,
+        message: error.message,
+      })
+    }
+    return null
+  }
+
+  const statusRow = (data || {}) as Partial<{ account_exists: boolean; email_confirmed: boolean }>
+  return {
+    accountExists: Boolean(statusRow.account_exists),
+    emailConfirmed: Boolean(statusRow.email_confirmed),
+  }
+}
+
 export function BarbershopSignupWizard() {
   const navigate = useNavigate()
-  const { user, refreshUserData } = useAuth()
+  const [searchParams] = useSearchParams()
+  const { user, loading: authLoading, refreshUserData } = useAuth()
   const {
     state,
     pendingDraft,
@@ -227,6 +296,18 @@ export function BarbershopSignupWizard() {
   const [finishSuccess, setFinishSuccess] = useState(false)
   const [navigatingAfterSuccess, setNavigatingAfterSuccess] = useState(false)
   const [forceAccountForm, setForceAccountForm] = useState(false)
+  const [newIntentSessionChecked, setNewIntentSessionChecked] = useState(() => searchParams.get('intent') !== 'new')
+  const [verificationEmail, setVerificationEmail] = useState('')
+  const [verificationMessage, setVerificationMessage] = useState('')
+  const forceNewAccountIntent = searchParams.get('intent') === 'new'
+
+  function normalizeEmail(value: string | null | undefined) {
+    return (value || '').trim().toLowerCase()
+  }
+
+  function isValidEmail(value: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+  }
 
   useEffect(() => {
     return () => {
@@ -238,7 +319,26 @@ export function BarbershopSignupWizard() {
 
   const currentStepInfo = STEP_COPY[state.step]
   const progress = (state.step / TOTAL_WIZARD_STEPS) * 100
-  const accountAuthenticated = Boolean(user) && !forceAccountForm
+  const accountAuthenticated = Boolean(user) && !forceAccountForm && !forceNewAccountIntent
+  const pendingDraftEmail = normalizeEmail(pendingDraft?.data.accountEmail)
+  const activeEmail = normalizeEmail(user?.email)
+  const enteredEmail = normalizeEmail(state.data.accountEmail)
+  const pendingDraftSavedAtLabel = pendingDraft?.savedAt
+    ? new Date(pendingDraft.savedAt).toLocaleString('pt-BR')
+    : ''
+  const hasPendingDraftForAuthenticatedUser = Boolean(
+    !forceNewAccountIntent &&
+    pendingDraft &&
+    pendingDraftEmail &&
+    activeEmail === pendingDraftEmail
+  )
+  const hasPendingDraftForEnteredEmail = Boolean(
+    pendingDraft &&
+    pendingDraftEmail &&
+    !accountAuthenticated &&
+    enteredEmail &&
+    enteredEmail === pendingDraftEmail
+  )
   const skipAccountValidation = accountAuthenticated || state.step > 1
   const currentStepValidation = useMemo(
     () => validateStep(state.step, state.data, { skipAccountValidation: accountAuthenticated }),
@@ -251,9 +351,139 @@ export function BarbershopSignupWizard() {
   const canAdvance = state.step === 6 ? finalValidation.ok : currentStepValidation.ok
   const loadingAction = submitLoading || accountLoading
 
+  useEffect(() => {
+    if (!forceNewAccountIntent || newIntentSessionChecked) return
+    if (authLoading || !draftReady) return
+    if (state.step > 1) {
+      setNewIntentSessionChecked(true)
+      return
+    }
+    if (!user) {
+      setNewIntentSessionChecked(true)
+      return
+    }
+
+    let cancelled = false
+
+    void (async () => {
+      setAccountLoading(true)
+      setForceAccountForm(true)
+      setSubmitError('')
+      const { error } = await supabase.auth.signOut()
+      if (cancelled) return
+      if (error) {
+        setSubmitError(translateError(error.message || 'Nao foi possivel limpar a sessao anterior.'))
+      }
+      setAccountLoading(false)
+      setNewIntentSessionChecked(true)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, draftReady, forceNewAccountIntent, newIntentSessionChecked, state.step, user])
+
+  useEffect(() => {
+    if (!pendingDraft) return
+    if (!pendingDraftEmail) {
+      discardDraft()
+      return
+    }
+    if (accountAuthenticated && activeEmail && activeEmail !== pendingDraftEmail) {
+      discardDraft()
+    }
+  }, [accountAuthenticated, activeEmail, discardDraft, pendingDraft, pendingDraftEmail])
+
+  function handleAccountEmailChange(value: string) {
+    const normalizedValue = normalizeEmail(value)
+    if (verificationEmail && normalizedValue !== verificationEmail) {
+      setVerificationEmail('')
+      setVerificationMessage('')
+    }
+    if (
+      pendingDraft &&
+      pendingDraftEmail &&
+      !accountAuthenticated &&
+      normalizedValue &&
+      isValidEmail(normalizedValue) &&
+      normalizedValue !== pendingDraftEmail
+    ) {
+      discardDraft()
+    }
+
+    setField('accountEmail', value)
+  }
+
+  function markVerificationRequired(email: string, message: string) {
+    setVerificationEmail(email)
+    setVerificationMessage(message)
+    setSubmitError('')
+    setSubmitWarning('')
+  }
+
+  function resetVerificationState(clearFields = false) {
+    setVerificationEmail('')
+    setVerificationMessage('')
+    if (!clearFields) return
+    setField('accountEmail', '')
+    setField('accountPassword', '')
+    setField('accountConfirmPassword', '')
+    setErrors({})
+  }
+
+  async function loginAndAdvance(email: string, password: string, options?: { existingAccount?: boolean }) {
+    const { data: loginData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (signInError) {
+      if (import.meta.env.DEV) {
+        console.error('[create-shop] signIn fallback failed', {
+          status: signInError.status,
+          code: signInError.code,
+          message: signInError.message,
+        })
+      }
+
+      if (isEmailNotConfirmedError(signInError.code, signInError.message)) {
+        markVerificationRequired(
+          email,
+          `A conta para ${email} ja existe, mas o email ainda nao foi confirmado. Confirme o email e depois clique em "Ja confirmei, entrar e continuar".`
+        )
+        return false
+      }
+
+      if (options?.existingAccount && isInvalidCredentialsError(signInError.code, signInError.message)) {
+        setSubmitError('Este email ja esta cadastrado. Use a senha original da conta ou recupere o acesso para continuar.')
+        return false
+      }
+
+      setSubmitError(translateError(signInError.message || 'Nao foi possivel entrar com esta conta agora.'))
+      return false
+    }
+
+    if (!loginData.user) {
+      setSubmitError('Nao foi possivel validar sua conta neste momento.')
+      return false
+    }
+
+    setVerificationEmail('')
+    setVerificationMessage('')
+    setField('accountEmail', email)
+    setField('accountPassword', '')
+    setField('accountConfirmPassword', '')
+    setForceAccountForm(false)
+    nextStep()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    return true
+  }
+
   async function handleUseDifferentAccount() {
     setSubmitError('')
     setSubmitWarning('')
+    setVerificationEmail('')
+    setVerificationMessage('')
     setAccountLoading(true)
     setForceAccountForm(true)
     setField('accountEmail', '')
@@ -268,6 +498,46 @@ export function BarbershopSignupWizard() {
     }
 
     setAccountLoading(false)
+  }
+
+  async function handleRetryAccountAccess() {
+    const normalizedEmail = state.data.accountEmail.trim().toLowerCase()
+    const password = state.data.accountPassword
+
+    if (!normalizedEmail) {
+      setErrors({ accountEmail: 'Informe o email.' })
+      return
+    }
+
+    if (!password) {
+      setErrors({ accountPassword: 'Informe a senha.' })
+      return
+    }
+
+    setSubmitError('')
+    setSubmitWarning('')
+    setAccountLoading(true)
+
+    try {
+      const accountStatus = await fetchAuthAccountStatus(normalizedEmail)
+      if (accountStatus && !accountStatus.accountExists) {
+        resetVerificationState()
+        setSubmitError('Nao encontramos uma conta criada para este email. Tente novamente o cadastro.')
+        return
+      }
+
+      if (accountStatus && !accountStatus.emailConfirmed) {
+        markVerificationRequired(
+          normalizedEmail,
+          `A conta para ${normalizedEmail} ainda nao foi confirmada. Confirme o email e depois clique novamente em "Ja confirmei, entrar e continuar".`
+        )
+        return
+      }
+
+      await loginAndAdvance(normalizedEmail, password, { existingAccount: true })
+    } finally {
+      setAccountLoading(false)
+    }
   }
 
   function handlePhoneChange(event: ChangeEvent<HTMLInputElement>) {
@@ -337,42 +607,76 @@ export function BarbershopSignupWizard() {
     setAccountLoading(true)
 
     try {
+      if (verificationEmail && verificationEmail === normalizedEmail) {
+        await handleRetryAccountAccess()
+        return
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const activeEmail = sessionData.session?.user?.email?.trim().toLowerCase() || null
+      if (activeEmail && activeEmail !== normalizedEmail) {
+        await supabase.auth.signOut()
+      }
+
+      const accountStatus = await fetchAuthAccountStatus(normalizedEmail)
+      if (accountStatus?.accountExists) {
+        if (!accountStatus.emailConfirmed) {
+          markVerificationRequired(
+            normalizedEmail,
+            `A conta para ${normalizedEmail} ja existe, mas o email ainda nao foi confirmado. Confirme o email e depois clique em "Ja confirmei, entrar e continuar".`
+          )
+          return
+        }
+
+        const didAdvance = await loginAndAdvance(normalizedEmail, password, { existingAccount: true })
+        if (!didAdvance) return
+        return
+      }
+
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
       })
 
       if (signUpError) {
-        const shouldTrySignIn = signUpError.status === 429 || isAlreadyRegisteredError(signUpError.message || '')
+        if (import.meta.env.DEV) {
+          console.error('[create-shop] signUp failed', {
+            status: signUpError.status,
+            code: signUpError.code,
+            message: signUpError.message,
+          })
+        }
+
+        const shouldTrySignIn = shouldTryExistingAccountFallback(signUpError.status, signUpError.code, signUpError.message)
         if (!shouldTrySignIn) {
           setSubmitError(translateError(signUpError.message))
           return
         }
 
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
-        })
-
-        if (signInError) {
-          setSubmitError(translateError(signInError.message || signUpError.message))
+        const refreshedStatus = await fetchAuthAccountStatus(normalizedEmail)
+        if (refreshedStatus?.accountExists && !refreshedStatus.emailConfirmed) {
+          markVerificationRequired(
+            normalizedEmail,
+            `A conta para ${normalizedEmail} ja existe, mas o email ainda nao foi confirmado. Confirme o email e depois clique em "Ja confirmei, entrar e continuar".`
+          )
           return
         }
+
+        const didAdvance = await loginAndAdvance(normalizedEmail, password, { existingAccount: true })
+        if (!didAdvance) return
       } else if (!signUpData.session) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
-        })
-
-        if (signInError) {
-          setSubmitError('Conta criada, mas o login automatico falhou. Verifique seu email e entre para continuar.')
-          return
-        }
+        markVerificationRequired(
+          normalizedEmail,
+          `A conta para ${normalizedEmail} foi criada. Confirme o email enviado e depois clique em "Ja confirmei, entrar e continuar".`
+        )
+        return
       }
 
       setField('accountEmail', normalizedEmail)
       setField('accountPassword', '')
       setField('accountConfirmPassword', '')
+      setVerificationEmail('')
+      setVerificationMessage('')
       setForceAccountForm(false)
       nextStep()
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -438,6 +742,19 @@ export function BarbershopSignupWizard() {
       const parsedSlotInterval = Number.parseInt(state.data.slotIntervalMinutes, 10)
       const parsedBuffer = Number.parseInt(state.data.bufferMinutes, 10)
       const slug = `${generateSlug(normalizedShopName)}-${Date.now().toString(36)}`
+      const hasConfirmedCoordinates =
+        state.data.mapConfirmed &&
+        typeof state.data.latitude === 'number' &&
+        typeof state.data.longitude === 'number'
+      const manualFormattedAddress = buildReadableAddress({
+        cep: normalizedCep,
+        address_street: normalizedStreet,
+        address_number: normalizedNumber,
+        neighborhood: normalizedNeighborhood,
+        city: normalizedCity,
+        state: normalizedState,
+        complement: normalizedComplement,
+      })
       const addressLine = buildAddressLine({
         address_street: normalizedStreet,
         address_number: normalizedNumber,
@@ -458,6 +775,10 @@ export function BarbershopSignupWizard() {
         address: addressLine || null,
         latitude: state.data.latitude,
         longitude: state.data.longitude,
+        formatted_address: hasConfirmedCoordinates ? manualFormattedAddress : null,
+        geocode_precision: hasConfirmedCoordinates ? 'rooftop' : null,
+        geocode_provider: hasConfirmedCoordinates ? 'manual_map' : null,
+        geocoded_at: hasConfirmedCoordinates ? new Date().toISOString() : null,
         timezone: normalizedTimezone,
         slot_interval_minutes: parsedSlotInterval,
         buffer_minutes: parsedBuffer,
@@ -574,7 +895,17 @@ export function BarbershopSignupWizard() {
           isAuthenticated={accountAuthenticated}
           currentEmail={user?.email || state.data.accountEmail}
           accountLoading={accountLoading}
+          verificationEmail={verificationEmail || undefined}
+          verificationMessage={verificationMessage || undefined}
+          pendingDraftEmail={pendingDraftEmail || undefined}
+          pendingDraftSavedAt={pendingDraftSavedAtLabel || undefined}
+          showDraftActions={hasPendingDraftForAuthenticatedUser || hasPendingDraftForEnteredEmail}
           onUseDifferentAccount={() => void handleUseDifferentAccount()}
+          onUseAnotherEmail={() => resetVerificationState(true)}
+          onRetryAccountAccess={() => void handleRetryAccountAccess()}
+          onResumeDraft={resumeDraft}
+          onDiscardDraft={discardDraft}
+          onAccountEmailChange={handleAccountEmailChange}
           onFieldChange={setField}
         />
       )
@@ -640,34 +971,11 @@ export function BarbershopSignupWizard() {
     )
   }
 
-  if (pendingDraft) {
+  if (forceNewAccountIntent && !newIntentSessionChecked) {
     return (
       <div className="signup-wizard-bg flex min-h-[100dvh] items-center justify-center px-4 py-8">
-        <div className="signup-wizard-card signup-wizard-scope w-full max-w-[720px] rounded-[20px] p-6 sm:p-8">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-[rgba(59,130,246,0.45)] bg-[rgba(37,99,235,0.2)] text-[#bfdbfe]">
-            <Scissors size={20} />
-          </div>
-          <h1 className="text-center text-2xl font-bold text-[#f8fafc]">Continuar cadastro da barbearia</h1>
-          <p className="mt-2 text-center text-sm text-[#94a3b8]">
-            Encontramos um rascunho salvo em {new Date(pendingDraft.savedAt).toLocaleString()}.
-          </p>
-
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={discardDraft}
-              className="rounded-xl border border-[rgba(148,163,184,0.3)] bg-[rgba(15,23,42,0.7)] px-4 py-2.5 text-sm font-semibold text-[#cbd5e1] transition hover:bg-[rgba(30,41,59,0.88)]"
-            >
-              Comecar do zero
-            </button>
-            <button
-              type="button"
-              onClick={resumeDraft}
-              className="rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-hover)]"
-            >
-              Continuar de onde parou
-            </button>
-          </div>
+        <div className="signup-wizard-card signup-wizard-scope w-full max-w-[720px] rounded-[20px] p-8 text-center">
+          <p className="text-sm text-[#cbd5e1]">Preparando cadastro...</p>
         </div>
       </div>
     )

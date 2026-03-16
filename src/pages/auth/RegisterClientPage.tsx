@@ -183,7 +183,7 @@ export function RegisterClientPage() {
               link para ativar sua conta.
             </p>
             <Link
-              to="/login"
+              to="/register"
               className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
             >
               <ArrowLeft size={14} />
@@ -252,7 +252,7 @@ export function RegisterClientPage() {
             <p className="text-center text-xs text-[var(--color-text-muted)]">
               Ja tem conta?{' '}
               <Link
-                to="/login"
+                to="/register"
                 className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
               >
                 Entrar

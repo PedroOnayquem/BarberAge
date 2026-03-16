@@ -1,12 +1,13 @@
 import { Clock3 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { CSSProperties } from 'react'
+import { usePickerPopover } from './usePickerPopover'
 
 interface TimePickerFieldProps {
   label: string
   value: string
   onChange: (value: string) => void
+  options?: string[]
   error?: string
   helperText?: string
   disabled?: boolean
@@ -38,6 +39,7 @@ export function TimePickerField({
   label,
   value,
   onChange,
+  options: customOptions,
   error,
   helperText,
   disabled,
@@ -47,87 +49,30 @@ export function TimePickerField({
 }: TimePickerFieldProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const popoverRef = useRef<HTMLDivElement | null>(null)
   const [open, setOpen] = useState(false)
-  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({})
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const { popoverRef, popoverStyle } = usePickerPopover({
+    open,
+    onClose: () => setOpen(false),
+    containerRef,
+    triggerRef,
+    minDesktopWidth: 280,
+    maxWidth: 360,
+    estimatedHeight: 320,
+  })
 
   const options = useMemo(() => {
-    const base = buildTimes(stepMinutes)
+    const base = customOptions && customOptions.length > 0 ? customOptions : buildTimes(stepMinutes)
     if (!value || base.includes(value)) return base
     const merged = [...base, value]
     return merged.sort((a, b) => toMinutes(a) - toMinutes(b))
-  }, [stepMinutes, value])
+  }, [customOptions, stepMinutes, value])
 
   useEffect(() => {
     if (!open) return
     const selectedIndex = options.findIndex((time) => time === value)
     setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0)
   }, [open, options, value])
-
-  useEffect(() => {
-    if (!open) return
-
-    function updatePopoverPosition() {
-      if (!triggerRef.current) return
-      const rect = triggerRef.current.getBoundingClientRect()
-      const viewportPadding = 12
-      const desktopMinWidth = window.innerWidth >= 1024 ? 280 : 0
-      const targetWidth = Math.max(rect.width, desktopMinWidth)
-      const maxAllowedWidth = Math.min(360, window.innerWidth - viewportPadding * 2)
-      const width = Math.min(targetWidth, maxAllowedWidth)
-
-      let left = rect.left
-      if (left + width > window.innerWidth - viewportPadding) {
-        left = window.innerWidth - viewportPadding - width
-      }
-      if (left < viewportPadding) left = viewportPadding
-
-      const estimatedHeight = 320
-      const spaceBelow = window.innerHeight - rect.bottom
-      const shouldFlip = spaceBelow < estimatedHeight && rect.top > estimatedHeight
-      const top = shouldFlip ? rect.top - 8 : rect.bottom + 8
-
-      setPopoverStyle({
-        position: 'fixed',
-        top,
-        left,
-        width,
-        zIndex: 9999,
-        transform: shouldFlip ? 'translateY(-100%)' : 'none',
-      })
-    }
-
-    updatePopoverPosition()
-    window.addEventListener('resize', updatePopoverPosition)
-    window.addEventListener('scroll', updatePopoverPosition, true)
-    return () => {
-      window.removeEventListener('resize', updatePopoverPosition)
-      window.removeEventListener('scroll', updatePopoverPosition, true)
-    }
-  }, [open])
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node
-      const clickedInsideTrigger = !!containerRef.current?.contains(target)
-      const clickedInsidePopover = !!popoverRef.current?.contains(target)
-      if (!clickedInsideTrigger && !clickedInsidePopover) {
-        setOpen(false)
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false)
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleEscape)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleEscape)
-    }
-  }, [])
 
   return (
     <div className="space-y-1.5">

@@ -4,8 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
-import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns'
 import { getSignedAvatarUrl, SHOP_AVATARS_BUCKET } from '../lib/avatarStorage'
+import { formatTimeInTimeZone, getUtcRangeForLocalDate, getUtcRangeForLocalMonth } from '../lib/timezone'
 
 interface Stats {
   todayAppointments: number
@@ -67,10 +67,9 @@ export function DashboardPage() {
     setLoading(true)
 
     const now = new Date()
-    const todayStart = startOfDay(now).toISOString()
-    const todayEnd = endOfDay(now).toISOString()
-    const monthStart = startOfMonth(now).toISOString()
-    const monthEnd = endOfMonth(now).toISOString()
+    const shopTimeZone = currentShop.timezone || 'America/Sao_Paulo'
+    const todayRange = getUtcRangeForLocalDate(now, shopTimeZone)
+    const monthRange = getUtcRangeForLocalMonth(now, shopTimeZone)
 
     const [todayRes, monthRes, clientsRes, servicesRes, profRes, pendingRes, recentRes] =
       await Promise.all([
@@ -78,15 +77,15 @@ export function DashboardPage() {
           .from('appointments')
           .select('id', { count: 'exact', head: true })
           .eq('shop_id', currentShop.id)
-          .gte('start_at', todayStart)
-          .lte('start_at', todayEnd)
+          .gte('start_at', todayRange.startIso)
+          .lt('start_at', todayRange.endExclusiveIso)
           .not('status', 'in', '("cancelled","no_show")'),
         supabase
           .from('appointments')
           .select('id', { count: 'exact', head: true })
           .eq('shop_id', currentShop.id)
-          .gte('start_at', monthStart)
-          .lte('start_at', monthEnd)
+          .gte('start_at', monthRange.startIso)
+          .lt('start_at', monthRange.endExclusiveIso)
           .not('status', 'in', '("cancelled","no_show")'),
         supabase
           .from('clients')
@@ -111,7 +110,8 @@ export function DashboardPage() {
           .from('appointments')
           .select('id, start_at, status, clients(name), professionals(name)')
           .eq('shop_id', currentShop.id)
-          .gte('start_at', todayStart)
+          .gte('start_at', todayRange.startIso)
+          .lt('start_at', todayRange.endExclusiveIso)
           .order('start_at', { ascending: true })
           .limit(10),
       ])
@@ -200,7 +200,7 @@ export function DashboardPage() {
                 <div key={apt.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     <div className="text-sm font-medium text-[var(--color-text)]">
-                      {format(new Date(apt.start_at), 'HH:mm')}
+                      {formatTimeInTimeZone(apt.start_at, currentShop?.timezone || 'America/Sao_Paulo')}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-[var(--color-text)]">
@@ -221,4 +221,3 @@ export function DashboardPage() {
     </div>
   )
 }
-

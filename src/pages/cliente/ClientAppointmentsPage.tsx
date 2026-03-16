@@ -20,15 +20,6 @@ export function ClientAppointmentsPage() {
   const [selectedApt, setSelectedApt] = useState<ClientAppointment | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
 
-  useEffect(() => {
-    if (clientUser && clientShop) {
-      loadAppointments()
-      return
-    }
-    setLoading(false)
-    setAppointments([])
-  }, [clientUser, clientShop])
-
   async function loadAppointments() {
     if (!clientUser || !clientShop) return
     setLoading(true)
@@ -43,6 +34,15 @@ export function ClientAppointmentsPage() {
     setAppointments((data as ClientAppointment[]) || [])
     setLoading(false)
   }
+
+  useEffect(() => {
+    if (clientUser && clientShop) {
+      void loadAppointments()
+      return
+    }
+    setLoading(false)
+    setAppointments([])
+  }, [clientUser, clientShop])
 
   function openCancel(appointment: ClientAppointment) {
     setSelectedApt(appointment)

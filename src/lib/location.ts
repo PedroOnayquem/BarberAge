@@ -9,6 +9,8 @@ export interface LocationFields {
   address?: string | null
 }
 
+export type GeocodePrecision = 'rooftop' | 'street' | 'postal_code' | 'city'
+
 export function normalizeCep(value: string | null | undefined) {
   return (value || '').replace(/\D/g, '').slice(0, 8)
 }
@@ -96,6 +98,47 @@ export interface NormalizedCoordinates {
   latitude: number
   longitude: number
   wasSwapped: boolean
+}
+
+export function normalizeGeocodePrecision(value: unknown): GeocodePrecision | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'rooftop' || normalized === 'street' || normalized === 'postal_code' || normalized === 'city') {
+    return normalized
+  }
+  return null
+}
+
+export function getLocationPreviewZoom(precisionLike: unknown) {
+  const precision = normalizeGeocodePrecision(precisionLike)
+  if (precision === 'rooftop') return 17
+  if (precision === 'street') return 16
+  if (precision === 'postal_code') return 15
+  if (precision === 'city') return 13
+  return 16
+}
+
+export function formatGeocodeProviderLabel(providerLike: unknown) {
+  if (typeof providerLike !== 'string') return ''
+  const normalized = providerLike.trim().toLowerCase()
+  if (!normalized) return ''
+  if (normalized === 'nominatim') return 'Nominatim'
+  if (normalized === 'manual' || normalized === 'manual_map') return 'Mapa confirmado manualmente'
+  return providerLike.trim()
+}
+
+export function formatLocationPrecisionLabel(precisionLike: unknown, providerLike?: unknown) {
+  const provider = typeof providerLike === 'string' ? providerLike.trim().toLowerCase() : ''
+  if (provider === 'manual' || provider === 'manual_map') {
+    return 'Ponto confirmado manualmente no mapa'
+  }
+
+  const precision = normalizeGeocodePrecision(precisionLike)
+  if (precision === 'rooftop') return 'Precisão alta: número/local exato'
+  if (precision === 'street') return 'Precisão boa: rua confirmada'
+  if (precision === 'postal_code') return 'Precisão média: centrado por CEP'
+  if (precision === 'city') return 'Precisão baixa: centrado por cidade'
+  return 'Coordenadas disponíveis'
 }
 
 export function parseCoordinateNumber(value: unknown) {

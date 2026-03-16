@@ -9,6 +9,7 @@ import { DatePickerCard } from '../../components/ui/DatePickerCard'
 import { translateError } from '../../lib/errorMessages'
 import { format, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { formatLongDateTimeInTimeZone, formatTimeInTimeZone } from '../../lib/timezone'
 import type { Tables } from '../../types/database'
 
 type Service = Tables<'services'>
@@ -42,15 +43,20 @@ export function ClientBookingPage() {
   const [bookingError, setBookingError] = useState('')
   const [bookingSuccess, setBookingSuccess] = useState(false)
 
-  useEffect(() => {
-    if (!shopId) {
-      setServices([])
-      setProfessionals([])
-      setLoading(false)
-      return
-    }
-    void loadData()
-  }, [shopId])
+  function resetBookingState() {
+    setStep('service')
+    setSelectedServices([])
+    setSelectedProfessional(null)
+    setSelectedDate(startOfDay(new Date()))
+    setSlots([])
+    setSelectedSlot(null)
+    setSlotsLoading(false)
+    setSlotsError('')
+    setCatalogError('')
+    setBookingLoading(false)
+    setBookingError('')
+    setBookingSuccess(false)
+  }
 
   async function loadData() {
     setLoading(true)
@@ -74,6 +80,18 @@ export function ClientBookingPage() {
     setProfessionals((pRes.data || []) as Professional[])
     setLoading(false)
   }
+
+  useEffect(() => {
+    if (!shopId) {
+      resetBookingState()
+      setServices([])
+      setProfessionals([])
+      setLoading(false)
+      return
+    }
+    resetBookingState()
+    void loadData()
+  }, [shopId])
 
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration_minutes, 0)
   const totalPrice = selectedServices.reduce((sum, s) => sum + Number(s.price), 0)
@@ -162,12 +180,7 @@ export function ClientBookingPage() {
   }
 
   function resetBooking() {
-    setStep('service')
-    setSelectedServices([])
-    setSelectedProfessional(null)
-    setSelectedSlot(null)
-    setBookingSuccess(false)
-    setBookingError('')
+    resetBookingState()
   }
 
   if (loading) {
@@ -186,7 +199,7 @@ export function ClientBookingPage() {
         </div>
         <h2 className="text-xl font-bold text-[#0a1f44]">Agendamento realizado!</h2>
         <p className="mt-2 text-sm text-[#6b7a95]">
-          {format(new Date(selectedSlot!.slot_start), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+          {formatLongDateTimeInTimeZone(selectedSlot!.slot_start, clientShop?.timezone || 'America/Sao_Paulo')}
         </p>
         <p className="text-sm text-[#6b7a95]">
           com {selectedProfessional?.name}
@@ -379,7 +392,7 @@ export function ClientBookingPage() {
                         : 'border-[#dbe2ec] bg-white text-[#1f3760] hover:border-[#cfd8e6]'
                     }`}
                   >
-                    {format(new Date(slot.slot_start), 'HH:mm')}
+                    {formatTimeInTimeZone(slot.slot_start, clientShop?.timezone || 'America/Sao_Paulo')}
                   </button>
                 )
               })}
@@ -421,7 +434,7 @@ export function ClientBookingPage() {
               <div>
                 <p className="text-xs font-medium uppercase text-[#8b9bb8]">Data e horário</p>
                 <p className="text-sm text-[#0a1f44]">
-                  {selectedSlot && format(new Date(selectedSlot.slot_start), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+                  {selectedSlot && formatLongDateTimeInTimeZone(selectedSlot.slot_start, clientShop?.timezone || 'America/Sao_Paulo')}
                 </p>
               </div>
               <div className="border-t border-[#e8edf5] pt-3">

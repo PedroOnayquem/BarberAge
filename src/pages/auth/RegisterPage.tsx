@@ -37,7 +37,7 @@ export function RegisterPage() {
       if (error.status === 429) {
         const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
         if (!loginError) {
-          window.location.href = '/create-shop'
+          window.location.href = '/create-shop?intent=new'
           return
         }
         setError(translateError(error.message))
@@ -51,13 +51,13 @@ export function RegisterPage() {
     }
 
     if (data.session) {
-      window.location.href = '/create-shop'
+      window.location.href = '/create-shop?intent=new'
       return
     }
 
     const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
     if (!loginError) {
-      window.location.href = '/create-shop'
+      window.location.href = '/create-shop?intent=new'
       return
     }
 
@@ -83,7 +83,7 @@ export function RegisterPage() {
               link para ativar sua conta.
             </p>
             <Link
-              to="/login"
+              to="/register"
               className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
             >
               <ArrowLeft size={14} />
@@ -136,7 +136,7 @@ export function RegisterPage() {
             <p className="text-center text-xs text-[var(--color-text-muted)]">
               Ja tem conta?{' '}
               <Link
-                to="/login"
+                to="/register"
                 className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
               >
                 Entrar

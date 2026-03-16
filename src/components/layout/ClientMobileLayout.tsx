@@ -47,7 +47,7 @@ export function ClientMobileLayout() {
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    navigate('/login')
+    navigate('/register')
   }
 
   const mobileNavItems = [

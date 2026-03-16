@@ -47,10 +47,6 @@ export function ClientSearchPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
   async function loadData() {
     setLoading(true)
     setError('')
@@ -91,6 +87,10 @@ export function ClientSearchPage() {
     setShops(mapped)
     setLoading(false)
   }
+
+  useEffect(() => {
+    void loadData()
+  }, [])
 
   const filteredShops = useMemo(() => {
     const q = normalize(query)
