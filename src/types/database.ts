@@ -341,6 +341,7 @@ export type Database = {
           name: string
           neighborhood: string | null
           phone: string | null
+          shop_type: string | null
           slug: string
           slot_interval_minutes: number
           state: string | null
@@ -366,6 +367,7 @@ export type Database = {
           name: string
           neighborhood?: string | null
           phone?: string | null
+          shop_type?: string | null
           slug: string
           slot_interval_minutes?: number
           state?: string | null
@@ -391,6 +393,7 @@ export type Database = {
           name?: string
           neighborhood?: string | null
           phone?: string | null
+          shop_type?: string | null
           slug?: string
           slot_interval_minutes?: number
           state?: string | null
@@ -419,6 +422,7 @@ export type Database = {
           name: string
           neighborhood: string | null
           phone: string | null
+          shop_type: string | null
           slug: string
           slot_interval_minutes: number
           state: string | null
@@ -444,6 +448,7 @@ export type Database = {
           name: string
           neighborhood?: string | null
           phone?: string | null
+          shop_type?: string | null
           slug: string
           slot_interval_minutes?: number
           state?: string | null
@@ -469,6 +474,7 @@ export type Database = {
           name?: string
           neighborhood?: string | null
           phone?: string | null
+          shop_type?: string | null
           slug?: string
           slot_interval_minutes?: number
           state?: string | null
