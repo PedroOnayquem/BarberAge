@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { CalendarDays, ChevronLeft, Clock4, MapPin, UserRound } from 'lucide-react'
 import { format, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { DatePickerCard } from '../../components/ui/DatePickerCard'
 import { Card } from '../../components/ui/Card'
 import { getSignedAvatarUrl, SHOP_AVATARS_BUCKET } from '../../lib/avatarStorage'
+import { withAuthNextPath } from '../../lib/authFlow'
 import { translateError } from '../../lib/errorMessages'
 import { caretIndexFromDigitCount, countDigitsBeforeCaret, formatPhone, normalizePhone } from '../../lib/phone'
 import { formatTimeInTimeZone } from '../../lib/timezone'
@@ -24,6 +25,7 @@ type Slot = { slot_start: string; slot_end: string }
 export function BarbershopPublicPage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
 
   const [shop, setShop] = useState<Shop | null>(null)
@@ -58,7 +60,6 @@ export function BarbershopPublicPage() {
     setBookingError('')
     setBookingSuccess(false)
   }
-
   function handleProfilePhoneChange(e: ChangeEvent<HTMLInputElement>) {
     const rawValue = e.target.value
     const currentCaret = e.target.selectionStart ?? rawValue.length
@@ -173,20 +174,6 @@ export function BarbershopPublicPage() {
     setLoading(false)
   }
 
-  useEffect(() => {
-    if (!slug) {
-      resetBookingSelectionState()
-      setShop(null)
-      setAvatarUrl(null)
-      setServices([])
-      setProfessionals([])
-      setLoading(false)
-      return
-    }
-
-    void loadPageData(slug)
-  }, [slug])
-
   async function loadSlots(params: { date: Date; professional: Professional; service: Service }) {
     if (!shop) return
     setSlotsLoading(true)
@@ -237,11 +224,27 @@ export function BarbershopPublicPage() {
     setSlotsLoading(false)
   }
 
+  useEffect(() => {
+    if (!slug) {
+      resetBookingSelectionState()
+      setShop(null)
+      setAvatarUrl(null)
+      setServices([])
+      setProfessionals([])
+      setLoading(false)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      void loadPageData(slug)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [slug])
+
   async function handleBook() {
     if (!shop || !selectedService || !selectedProfessional || !selectedSlot) return
 
     if (!user) {
-      navigate('/cliente/register')
+      navigate(withAuthNextPath('/cliente/register', location.pathname))
       return
     }
 
@@ -310,7 +313,12 @@ export function BarbershopPublicPage() {
 
   useEffect(() => {
     if (!selectedService || !selectedProfessional) return
-    loadSlots({ date: selectedDate, professional: selectedProfessional, service: selectedService })
+    const timer = window.setTimeout(() => {
+      void loadSlots({ date: selectedDate, professional: selectedProfessional, service: selectedService })
+    }, 0)
+    return () => window.clearTimeout(timer)
+    // loadSlots intentionally runs from a queued callback to avoid synchronous state updates in the effect body.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, selectedService, selectedProfessional])
 
   if (loading) {

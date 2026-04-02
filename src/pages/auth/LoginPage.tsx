@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useMemo, useState, type FormEvent } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { Building2, User, ArrowLeft, Sparkles } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getAuthNextPath, redirectAfterAuth, setLastAuthLoginMode, withAuthNextPath } from '../../lib/authFlow'
 import { translateError } from '../../lib/errorMessages'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { AuthCard } from '../../components/auth/AuthCard'
@@ -11,12 +12,17 @@ import { PrimaryButton } from '../../components/auth/PrimaryButton'
 type LoginMode = 'select' | 'shop' | 'client'
 
 export function LoginPage() {
-  const navigate = useNavigate()
+  const location = useLocation()
   const [mode, setMode] = useState<LoginMode>('select')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const nextPath = useMemo(() => getAuthNextPath(location.search), [location.search])
+  const clientRegisterHref = useMemo(
+    () => withAuthNextPath('/cliente/register', nextPath),
+    [nextPath]
+  )
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -34,7 +40,6 @@ export function LoginPage() {
 
     setLoading(true)
 
-    // Evita inconsistência quando existe sessão ativa de outro usuário.
     const { data: sessionData } = await supabase.auth.getSession()
     const activeEmail = sessionData.session?.user?.email?.trim().toLowerCase() || null
     if (activeEmail && activeEmail !== normalizedEmail) {
@@ -55,6 +60,12 @@ export function LoginPage() {
     }
 
     if (mode === 'shop') {
+      const userMeta = (data.user.user_metadata || {}) as Record<string, unknown>
+      const isClientOnlyAccount =
+        (userMeta.role === 'client' || userMeta.account_type === 'client') &&
+        userMeta.role !== 'shop' &&
+        userMeta.account_type !== 'shop'
+
       const { data: members, error: membersError } = await supabase
         .from('shop_members')
         .select('id')
@@ -67,43 +78,45 @@ export function LoginPage() {
         return
       }
 
-      if (!members || members.length === 0) {
-        navigate('/create-shop', { replace: true })
+      if ((!members || members.length === 0) && isClientOnlyAccount) {
+        setError('Esta conta está cadastrada como cliente. Use o acesso de cliente.')
+        await supabase.auth.signOut()
         setLoading(false)
         return
       }
 
-      navigate('/app/dashboard', { replace: true })
-    } else {
-      const userMeta = (data.user.user_metadata || {}) as Record<string, unknown>
-      const isClientByMetadata =
-        userMeta.role === 'client' || userMeta.account_type === 'client'
-
-      if (!isClientByMetadata) {
-        const { data: clientUsers, error: clientUsersError } = await supabase
-          .from('client_users')
-          .select('id')
-          .eq('user_id', data.user.id)
-          .limit(1)
-
-        if (clientUsersError) {
-          setError(translateError(clientUsersError.message || 'Não foi possível validar sua conta de cliente agora.'))
-          setLoading(false)
-          return
-        }
-
-        if (!clientUsers || clientUsers.length === 0) {
-          setError('Esta conta não está cadastrada como cliente. Cadastre-se primeiro.')
-          await supabase.auth.signOut()
-          setLoading(false)
-          return
-        }
-      }
-
-      navigate('/cliente/barbearias', { replace: true })
+      setLastAuthLoginMode('shop')
+      redirectAfterAuth(members && members.length > 0 ? '/app/dashboard' : '/create-shop')
+      return
     }
 
-    setLoading(false)
+    const userMeta = (data.user.user_metadata || {}) as Record<string, unknown>
+    const isClientByMetadata =
+      userMeta.role === 'client' || userMeta.account_type === 'client'
+
+    if (!isClientByMetadata) {
+      const { data: clientUsers, error: clientUsersError } = await supabase
+        .from('client_users')
+        .select('id')
+        .eq('user_id', data.user.id)
+        .limit(1)
+
+      if (clientUsersError) {
+        setError(translateError(clientUsersError.message || 'Não foi possível validar sua conta de cliente agora.'))
+        setLoading(false)
+        return
+      }
+
+      if (!clientUsers || clientUsers.length === 0) {
+        setError('Esta conta não está cadastrada como cliente. Cadastre-se primeiro.')
+        await supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
+    }
+
+    setLastAuthLoginMode('client')
+    redirectAfterAuth(nextPath || '/cliente/barbearias')
   }
 
   const subtitle =
@@ -155,14 +168,14 @@ export function LoginPage() {
             <p className="pt-3 text-center text-xs text-[var(--color-text-muted)]">
               Nao tem conta?{' '}
               <Link
-                to="/create-shop?intent=new"
+                to="/register"
                 className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
               >
                 Barbearia
               </Link>
               {' · '}
               <Link
-                to="/cliente/register"
+                to={clientRegisterHref}
                 className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
               >
                 Cliente
@@ -207,14 +220,14 @@ export function LoginPage() {
               Nao tem conta?{' '}
               {mode === 'shop' ? (
                 <Link
-                  to="/create-shop?intent=new"
+                  to="/register"
                   className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
                 >
                   Criar conta
                 </Link>
               ) : (
                 <Link
-                  to="/cliente/register"
+                  to={clientRegisterHref}
                   className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
                 >
                   Criar conta

@@ -1,8 +1,15 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { User, CheckCircle, ArrowLeft } from 'lucide-react'
+import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import type { User as AuthUser } from '@supabase/supabase-js'
+import { Link, useLocation } from 'react-router-dom'
+import { User as UserIcon, CheckCircle, ArrowLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../contexts/AuthContext'
+import {
+  getAuthNextPath,
+  redirectAfterAuth,
+  setLastAuthLoginMode,
+  withAuthNextPath,
+} from '../../lib/authFlow'
+import { upsertClientGlobalProfile } from '../../lib/clientProfiles'
 import { translateError } from '../../lib/errorMessages'
 import { caretIndexFromDigitCount, countDigitsBeforeCaret, formatPhone, normalizePhone } from '../../lib/phone'
 import { AuthLayout } from '../../components/auth/AuthLayout'
@@ -31,7 +38,7 @@ function shouldRetrySignUpWithoutMetadata(status?: number, message?: string): bo
 }
 
 export function RegisterClientPage() {
-  const { refreshUserData } = useAuth()
+  const location = useLocation()
   const [step, setStep] = useState<'form' | 'success'>('form')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -40,7 +47,31 @@ export function RegisterClientPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const navigate = useNavigate()
+  const nextPath = useMemo(() => getAuthNextPath(location.search), [location.search])
+  const loginHref = useMemo(() => withAuthNextPath('/login', nextPath), [nextPath])
+
+  async function finalizeClientAuth(params: {
+    authUser: AuthUser
+    metadata: Record<string, string>
+    normalizedName: string
+    normalizedPhone: string
+    normalizedEmail: string
+  }) {
+    const { authUser, metadata, normalizedName, normalizedPhone, normalizedEmail } = params
+
+    const { error: updateUserError } = await supabase.auth.updateUser({ data: metadata })
+    if (updateUserError) throw updateUserError
+
+    await upsertClientGlobalProfile({
+      userId: authUser.id,
+      name: normalizedName,
+      phone: normalizedPhone || null,
+      email: normalizedEmail || authUser.email || null,
+    })
+
+    setLastAuthLoginMode('client')
+    redirectAfterAuth(nextPath || '/cliente/barbearias')
+  }
 
   function handlePhoneChange(e: ChangeEvent<HTMLInputElement>) {
     const rawValue = e.target.value
@@ -128,9 +159,13 @@ export function RegisterClientPage() {
             password,
           })
           if (!loginError && loginData.user) {
-            await supabase.auth.updateUser({ data: metadata })
-            await refreshUserData()
-            navigate('/cliente/barbearias', { replace: true })
+            await finalizeClientAuth({
+              authUser: loginData.user,
+              metadata,
+              normalizedName,
+              normalizedPhone,
+              normalizedEmail,
+            })
             return
           }
         }
@@ -155,15 +190,28 @@ export function RegisterClientPage() {
           return
         }
 
-        await supabase.auth.updateUser({ data: metadata })
-        await refreshUserData()
-        navigate('/cliente/barbearias', { replace: true })
+        await finalizeClientAuth({
+          authUser: loginData.user,
+          metadata,
+          normalizedName,
+          normalizedPhone,
+          normalizedEmail,
+        })
         return
       }
 
-      await supabase.auth.updateUser({ data: metadata })
-      await refreshUserData()
-      navigate('/cliente/barbearias', { replace: true })
+      if (!signUpResult.data.user) {
+        setError('Erro ao criar conta')
+        return
+      }
+
+      await finalizeClientAuth({
+        authUser: signUpResult.data.user,
+        metadata,
+        normalizedName,
+        normalizedPhone,
+        normalizedEmail,
+      })
     } finally {
       setLoading(false)
     }
@@ -172,7 +220,7 @@ export function RegisterClientPage() {
   return (
     <AuthLayout>
       <AuthCard
-        icon={step === 'success' ? <CheckCircle size={30} /> : <User size={30} />}
+        icon={step === 'success' ? <CheckCircle size={30} /> : <UserIcon size={30} />}
         title="BARBERAGE"
         subtitle={step === 'success' ? 'Verifique seu email' : 'Cadastro Cliente'}
       >
@@ -183,7 +231,7 @@ export function RegisterClientPage() {
               link para ativar sua conta.
             </p>
             <Link
-              to="/register"
+              to={loginHref}
               className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
             >
               <ArrowLeft size={14} />
@@ -252,7 +300,7 @@ export function RegisterClientPage() {
             <p className="text-center text-xs text-[var(--color-text-muted)]">
               Ja tem conta?{' '}
               <Link
-                to="/register"
+                to={loginHref}
                 className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
               >
                 Entrar

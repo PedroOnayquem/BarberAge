@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Calendar, Users, Scissors, Clock, TrendingUp, AlertCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -47,7 +48,11 @@ export function DashboardPage() {
   const [shopAvatar, setShopAvatar] = useState<string | null>(null)
 
   useEffect(() => {
-    if (currentShop) loadDashboard()
+    if (currentShop) {
+      void loadDashboard()
+    } else {
+      setLoading(false)
+    }
   }, [currentShop])
 
   useEffect(() => {
@@ -133,6 +138,25 @@ export function DashboardPage() {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!currentShop) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold text-[var(--color-text)]">Dashboard</h1>
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-5">
+          <p className="text-sm text-[var(--color-text-muted)]">
+            Nenhuma barbearia vinculada a esta conta no momento.
+          </p>
+          <Link
+            to="/create-shop"
+            className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-[var(--color-primary)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+          >
+            Abrir cadastro da barbearia
+          </Link>
+        </div>
       </div>
     )
   }

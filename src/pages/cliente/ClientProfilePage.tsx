@@ -7,6 +7,7 @@ import { AvatarCropModal } from '../../components/ui/AvatarCropModal'
 import { Button } from '../../components/ui/Button'
 import { ProfileForm } from '../../components/cliente/profile/ProfileForm'
 import { ProfileHeader } from '../../components/cliente/profile/ProfileHeader'
+import { upsertClientGlobalProfile } from '../../lib/clientProfiles'
 import {
   CLIENT_AVATARS_BUCKET,
   getSignedAvatarUrl,
@@ -153,6 +154,13 @@ export function ClientProfilePage() {
 
       const { error: authError } = await supabase.auth.updateUser({ data: metadata })
       if (authError) throw authError
+
+      await upsertClientGlobalProfile({
+        userId: user.id,
+        name: normalizedName,
+        phone: normalizedPhone || null,
+        email: normalizedEmail || null,
+      })
 
       if (clientUser && clientProfile) {
         const { error: clientError } = await supabase

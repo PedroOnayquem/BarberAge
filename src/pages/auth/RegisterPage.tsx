@@ -2,11 +2,21 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle, ArrowLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { redirectAfterAuth, setLastAuthLoginMode } from '../../lib/authFlow'
 import { translateError } from '../../lib/errorMessages'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { AuthCard } from '../../components/auth/AuthCard'
 import { FormField } from '../../components/auth/FormField'
 import { PrimaryButton } from '../../components/auth/PrimaryButton'
+
+function isAlreadyRegisteredError(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return (
+    normalized.includes('already registered') ||
+    normalized.includes('already exists') ||
+    normalized.includes('já está cadastrado')
+  )
+}
 
 export function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -30,14 +40,33 @@ export function RegisterPage() {
       return
     }
 
+    const normalizedEmail = email.trim().toLowerCase()
+    const shopMetadata = {
+      role: 'shop',
+      account_type: 'shop',
+    }
+
     setLoading(true)
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: { data: shopMetadata },
+    })
 
     if (error) {
-      if (error.status === 429) {
-        const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+      const canLoginFallback = error.status === 429 || isAlreadyRegisteredError(error.message)
+
+      if (canLoginFallback) {
+        const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        })
         if (!loginError) {
-          window.location.href = '/create-shop?intent=new'
+          if (loginData.user) {
+            await supabase.auth.updateUser({ data: shopMetadata })
+          }
+          setLastAuthLoginMode('shop')
+          redirectAfterAuth('/create-shop')
           return
         }
         setError(translateError(error.message))
@@ -51,13 +80,21 @@ export function RegisterPage() {
     }
 
     if (data.session) {
-      window.location.href = '/create-shop?intent=new'
+      setLastAuthLoginMode('shop')
+      redirectAfterAuth('/create-shop')
       return
     }
 
-    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    })
     if (!loginError) {
-      window.location.href = '/create-shop?intent=new'
+      if (loginData.user) {
+        await supabase.auth.updateUser({ data: shopMetadata })
+      }
+      setLastAuthLoginMode('shop')
+      redirectAfterAuth('/create-shop')
       return
     }
 
