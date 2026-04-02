@@ -21,7 +21,6 @@ import {
   formatCep,
   formatGeocodeProviderLabel,
   formatLocationPrecisionLabel,
-  hasMinimumAddressForGeocoding,
   normalizeAndRepairCoordinates,
   normalizeCep,
   normalizeGeocodePrecision,
