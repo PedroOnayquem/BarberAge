@@ -1,52 +1,16 @@
-export class AddressLookupError extends Error {
-  code: string
-  status: number
+const DEFAULT_TIMEOUT_MS = 8000
+const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search'
 
-  constructor(code: string, status: number, message: string) {
-    super(message)
-    this.name = 'AddressLookupError'
-    this.code = code
-    this.status = status
-  }
-}
-
-interface ViaCepResponse {
-  cep?: string
-  logradouro?: string
-  bairro?: string
-  localidade?: string
-  uf?: string
+export interface CepLookupResult {
+  cep: string
+  logradouro: string
+  bairro: string
+  localidade: string
+  uf: string
   erro?: boolean
 }
 
-interface NominatimAddress {
-  house_number?: string
-  road?: string
-  postcode?: string
-  city?: string
-  town?: string
-  village?: string
-  municipality?: string
-  state?: string
-}
-
-interface NominatimResult {
-  lat?: string | number
-  lon?: string | number
-  importance?: string | number
-  display_name?: string
-  address?: NominatimAddress
-}
-
-interface QueryCandidate {
-  query: string
-  boost: number
-}
-
-const MAX_QUERY_CANDIDATES = 6
-const NOMINATIM_TIMEOUT_MS = 10000
-
-export interface GeocodeAddressInput {
+export interface GeocodeLookupParams {
   address?: string | null
   street?: string | null
   number?: string | null
@@ -56,270 +20,237 @@ export interface GeocodeAddressInput {
   cep?: string | null
 }
 
-function sanitize(value: string | null | undefined): string {
+export interface GeocodeLookupResult {
+  latitude: number | null
+  longitude: number | null
+  precision: 'address' | 'district' | 'city' | 'cep' | null
+  query: string | null
+  fallbackUsed: boolean
+  notFound: boolean
+  triedQueries: string[]
+}
+
+export class AddressLookupError extends Error {
+  readonly status: number
+  readonly code: string
+
+  constructor(status: number, code: string, message: string) {
+    super(message)
+    this.name = 'AddressLookupError'
+    this.status = status
+    this.code = code
+  }
+}
+
+function normalizeText(value: string | null | undefined) {
   return (value || '').trim()
 }
 
-function normalizeCep(value: string | null | undefined): string {
-  return sanitize(value).replace(/\D/g, '').slice(0, 8)
+export function parseCep(value: string | null | undefined) {
+  return (value || '').replace(/\D/g, '').slice(0, 8)
 }
 
-function formatCep(value: string | null | undefined): string {
-  const digits = normalizeCep(value)
+export function formatCep(value: string | null | undefined) {
+  const digits = parseCep(value)
   if (digits.length <= 5) return digits
   return `${digits.slice(0, 5)}-${digits.slice(5)}`
 }
 
-function parseCoordinate(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
+function toNumber(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
   if (typeof value === 'string') {
-    const normalized = value.trim().replace(',', '.')
-    if (!normalized) return null
-    const parsed = Number(normalized)
+    const parsed = Number(value.trim().replace(',', '.'))
     return Number.isFinite(parsed) ? parsed : null
   }
   return null
 }
 
-function normalizeForMatch(value: string | null | undefined): string {
-  return sanitize(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
+function buildAddressLine(street: string, number: string, neighborhood: string) {
+  const base = street && number ? `${street}, ${number}` : street || number || ''
+  return [base, neighborhood].filter(Boolean).join(', ')
 }
 
-function normalizeHouseNumber(value: string | null | undefined): string {
-  return sanitize(value)
-    .toLowerCase()
-    .replace(/\s+/g, '')
-    .replace(/[^0-9a-z/-]/g, '')
-}
-
-function buildQueryParts(parts: Array<string | null | undefined>): string {
-  return parts
-    .map((part) => sanitize(part))
-    .filter(Boolean)
-    .join(', ')
-}
-
-function expandStreetVariants(value: string): string[] {
-  const base = sanitize(value)
-  if (!base) return []
-
-  const replacements = [
-    base,
-    base
-      .replace(/\btv\.?\b/gi, 'travessa')
-      .replace(/\btrav\.?\b/gi, 'travessa')
-      .replace(/\br\.?\b/gi, 'rua')
-      .replace(/\bav\.?\b/gi, 'avenida')
-      .replace(/\bal\.?\b/gi, 'alameda'),
-  ]
-
-  return Array.from(new Set(replacements.map((entry) => sanitize(entry)).filter(Boolean)))
-}
-
-function buildQueryCandidates(input: GeocodeAddressInput): QueryCandidate[] {
-  const address = sanitize(input.address)
-  const street = sanitize(input.street)
-  const number = sanitize(input.number)
-  const neighborhood = sanitize(input.neighborhood)
-  const city = sanitize(input.city)
-  const state = sanitize(input.state).toUpperCase()
-  const cep = formatCep(input.cep)
+export function buildFullAddress(parts: {
+  street?: string | null
+  number?: string | null
+  neighborhood?: string | null
+  city?: string | null
+  state?: string | null
+  cep?: string | null
+}) {
+  const street = normalizeText(parts.street)
+  const number = normalizeText(parts.number)
+  const neighborhood = normalizeText(parts.neighborhood)
+  const city = normalizeText(parts.city)
+  const state = normalizeText(parts.state).toUpperCase()
+  const cep = formatCep(parts.cep)
   const cityState = [city, state].filter(Boolean).join(' - ')
 
-  const seen = new Set<string>()
-  const candidates: QueryCandidate[] = []
-  const baseStreetCandidates = expandStreetVariants(street || address)
-
-  function pushCandidate(query: string, boost: number) {
-    const normalized = sanitize(query)
-    if (!normalized) return
-    const dedupeKey = normalized.toLowerCase()
-    if (seen.has(dedupeKey)) return
-    seen.add(dedupeKey)
-    candidates.push({ query: normalized, boost })
-  }
-
-  for (const streetVariant of baseStreetCandidates) {
-    const streetWithNumber = streetVariant && number ? `${streetVariant}, ${number}` : buildQueryParts([streetVariant, number])
-    pushCandidate(buildQueryParts([streetWithNumber, neighborhood, cityState, cep, 'Brazil']), 10)
-    pushCandidate(buildQueryParts([streetWithNumber, cityState, cep, 'Brazil']), 8)
-    pushCandidate(buildQueryParts([streetWithNumber, cityState, 'Brazil']), 6)
-  }
-
-  if (address && address !== street) {
-    pushCandidate(buildQueryParts([address, neighborhood, cityState, cep, 'Brazil']), 7)
-    pushCandidate(buildQueryParts([address, cityState, cep, 'Brazil']), 5)
-    pushCandidate(buildQueryParts([address, cityState, 'Brazil']), 4)
-  }
-
-  if (cep) {
-    pushCandidate(buildQueryParts([`CEP ${cep}`, city, state, 'Brazil']), 2)
-    pushCandidate(buildQueryParts([cep, city, state, 'Brazil']), 2)
-  }
-
-  pushCandidate(buildQueryParts([city, state, 'Brazil']), 1)
-  return candidates.slice(0, MAX_QUERY_CANDIDATES)
+  return [buildAddressLine(street, number, neighborhood), cityState, cep, 'Brasil'].filter(Boolean).join(', ')
 }
 
-function extractAddressCity(address?: NominatimAddress): string {
-  if (!address) return ''
-  return sanitize(address.city || address.town || address.village || address.municipality || '')
-}
-
-function scoreNominatimResult(result: NominatimResult, input: GeocodeAddressInput, boost: number): number {
-  const address = result.address || {}
-  const queryPostcode = normalizeCep(input.cep)
-  const resultPostcode = normalizeCep(address.postcode)
-  const queryNumber = normalizeHouseNumber(input.number)
-  const resultNumber = normalizeHouseNumber(address.house_number)
-  const queryStreet = normalizeForMatch(input.street || input.address)
-  const resultStreet = normalizeForMatch(address.road)
-  const queryCity = normalizeForMatch(input.city)
-  const resultCity = normalizeForMatch(extractAddressCity(address))
-  const queryState = normalizeForMatch(input.state)
-  const resultState = normalizeForMatch(address.state)
-  const importance = parseCoordinate(result.importance) || 0
-
-  let score = importance * 20 + boost
-
-  if (resultPostcode) score += 6
-  if (queryPostcode && queryPostcode === resultPostcode) score += 18
-
-  if (resultNumber) score += 6
-  if (queryNumber && resultNumber && queryNumber === resultNumber) score += 24
-
-  if (queryStreet && resultStreet) {
-    if (queryStreet === resultStreet) score += 10
-    else if (queryStreet.includes(resultStreet) || resultStreet.includes(queryStreet)) score += 4
-  }
-
-  if (queryCity && resultCity && queryCity === resultCity) score += 8
-  if (queryState && resultState && queryState === resultState) score += 5
-
-  return score
-}
-
-async function fetchNominatimResults(query: string): Promise<NominatimResult[]> {
-  const endpoint =
-    `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=br&q=${encodeURIComponent(query)}`
-
-  const abortController = new AbortController()
-  const timeoutId = setTimeout(() => abortController.abort(), NOMINATIM_TIMEOUT_MS)
-  let response: Response
-
+async function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    response = await fetch(endpoint, {
-      signal: abortController.signal,
-      headers: {
-        'User-Agent': 'Barberage/1.0 (contact: suporte@barberage.app)',
-        'Accept-Language': 'pt-BR,pt;q=0.9',
-      },
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
     })
   } catch (error) {
-    if (abortController.signal.aborted) {
-      throw new AddressLookupError('geocode_timeout', 504, 'Tempo esgotado ao consultar geocodificacao.')
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new AddressLookupError(504, 'timeout', 'Tempo esgotado na consulta externa')
     }
     throw error
   } finally {
     clearTimeout(timeoutId)
   }
-
-  if (!response.ok) {
-    throw new AddressLookupError('geocode_provider_unavailable', 502, 'Falha ao consultar o provedor de geocodificacao.')
-  }
-
-  const results = (await response.json()) as NominatimResult[]
-  if (!Array.isArray(results)) return []
-  return results
 }
 
-function resolvePrecision(result: NominatimResult): 'rooftop' | 'street' | 'postal_code' | 'city' {
-  const hasNumber = Boolean(sanitize(result.address?.house_number))
-  const hasPostcode = Boolean(normalizeCep(result.address?.postcode))
-  if (hasNumber && hasPostcode) return 'rooftop'
-  if (hasNumber) return 'street'
-  if (hasPostcode) return 'postal_code'
-  return 'city'
-}
-
-export async function lookupCepServer(cepInput: string) {
-  const cep = normalizeCep(cepInput)
-  if (cep.length !== 8) {
-    throw new AddressLookupError('invalid_cep', 400, 'CEP invalido. Informe 8 digitos.')
-  }
-
-  const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, {
-    headers: { Accept: 'application/json' },
-  })
-
-  if (!response.ok) {
-    throw new AddressLookupError('cep_provider_unavailable', 502, 'Falha ao consultar o servico de CEP.')
-  }
-
-  const data = (await response.json()) as ViaCepResponse
-  if (data?.erro) {
-    throw new AddressLookupError('cep_not_found', 404, 'CEP nao encontrado.')
-  }
-
-  return {
-    cep: formatCep(data.cep || cep),
-    street: sanitize(data.logradouro),
-    neighborhood: sanitize(data.bairro),
-    city: sanitize(data.localidade),
-    state: sanitize(data.uf).toUpperCase(),
-  }
-}
-
-export async function geocodeAddressServer(input: GeocodeAddressInput) {
-  const candidates = buildQueryCandidates(input)
-  if (candidates.length === 0) {
-    throw new AddressLookupError('invalid_address', 400, 'Endereco incompleto para geocodificacao.')
-  }
-
-  let bestMatch: { result: NominatimResult; query: string; score: number } | null = null
-
-  for (const candidate of candidates) {
-    const results = await fetchNominatimResults(candidate.query)
-    if (!results.length) continue
-
-    for (const result of results) {
-      const latitude = parseCoordinate(result.lat)
-      const longitude = parseCoordinate(result.lon)
-      if (latitude === null || longitude === null) continue
-
-      const score = scoreNominatimResult(result, input, candidate.boost)
-      if (!bestMatch || score > bestMatch.score) {
-        bestMatch = {
-          result,
-          query: candidate.query,
-          score,
-        }
-      }
+function parseCepResponse(payload: unknown, requestedCep: string): CepLookupResult {
+  const data = (payload || {}) as Partial<CepLookupResult> & { erro?: boolean }
+  if (data.erro) {
+    return {
+      cep: formatCep(requestedCep),
+      logradouro: '',
+      bairro: '',
+      localidade: '',
+      uf: '',
+      erro: true,
     }
   }
 
-  if (!bestMatch) {
-    throw new AddressLookupError('location_not_found', 422, 'Localizacao nao encontrada para o endereco informado.')
+  return {
+    cep: typeof data.cep === 'string' && data.cep ? data.cep : formatCep(requestedCep),
+    logradouro: typeof data.logradouro === 'string' ? data.logradouro.trim() : '',
+    bairro: typeof data.bairro === 'string' ? data.bairro.trim() : '',
+    localidade: typeof data.localidade === 'string' ? data.localidade.trim() : '',
+    uf: typeof data.uf === 'string' ? data.uf.trim().toUpperCase() : '',
+  }
+}
+
+export async function lookupCepServer(rawCep: string): Promise<CepLookupResult> {
+  const cep = parseCep(rawCep)
+  if (cep.length !== 8) {
+    throw new AddressLookupError(400, 'invalid_cep', 'CEP deve conter 8 digitos')
   }
 
-  const bestResult = bestMatch.result
-  const latitude = parseCoordinate(bestResult.lat)
-  const longitude = parseCoordinate(bestResult.lon)
+  const response = await fetchWithTimeout(`https://viacep.com.br/ws/${cep}/json/`, {
+    headers: {
+      Accept: 'application/json',
+    },
+  })
 
-  if (latitude === null || longitude === null) {
-    throw new AddressLookupError('invalid_provider_response', 502, 'Resposta de geocodificacao invalida.')
+  if (!response.ok) {
+    throw new AddressLookupError(502, 'viacep_unavailable', `ViaCEP retornou status ${response.status}`)
+  }
+
+  const json = await response.json()
+  return parseCepResponse(json, cep)
+}
+
+function pushQuery(list: Array<{ query: string; precision: GeocodeLookupResult['precision'] }>, query: string, precision: GeocodeLookupResult['precision']) {
+  const normalized = query.trim()
+  if (!normalized) return
+  if (list.some((item) => item.query === normalized)) return
+  list.push({ query: normalized, precision })
+}
+
+function buildGeocodeQueries(params: GeocodeLookupParams) {
+  const address = normalizeText(params.address)
+  const street = normalizeText(params.street)
+  const number = normalizeText(params.number)
+  const neighborhood = normalizeText(params.neighborhood)
+  const city = normalizeText(params.city)
+  const state = normalizeText(params.state).toUpperCase()
+  const cepDigits = parseCep(params.cep)
+  const cepFormatted = formatCep(cepDigits)
+
+  const queries: Array<{ query: string; precision: GeocodeLookupResult['precision'] }> = []
+
+  if (address) {
+    pushQuery(queries, `${address}, Brasil`, 'address')
+  }
+
+  const fullAddress = buildFullAddress({
+    street,
+    number,
+    neighborhood,
+    city,
+    state,
+    cep: cepDigits,
+  })
+  pushQuery(queries, fullAddress, 'address')
+
+  pushQuery(queries, [neighborhood, city, state, cepFormatted, 'Brasil'].filter(Boolean).join(', '), 'district')
+  pushQuery(queries, [city, state, cepFormatted, 'Brasil'].filter(Boolean).join(', '), 'city')
+  pushQuery(queries, [city, state, 'Brasil'].filter(Boolean).join(', '), 'city')
+  pushQuery(queries, [cepFormatted, 'Brasil'].filter(Boolean).join(', '), 'cep')
+
+  return queries
+}
+
+async function searchNominatim(query: string) {
+  const url = new URL(NOMINATIM_ENDPOINT)
+  url.searchParams.set('format', 'jsonv2')
+  url.searchParams.set('limit', '1')
+  url.searchParams.set('countrycodes', 'br')
+  url.searchParams.set('q', query)
+
+  const response = await fetchWithTimeout(url.toString(), {
+    headers: {
+      'Accept': 'application/json',
+      'Accept-Language': 'pt-BR',
+      'User-Agent': 'Barberage/1.0 (geocode-proxy)',
+    },
+  }, 10000)
+
+  if (!response.ok) {
+    throw new AddressLookupError(502, 'geocode_unavailable', `Nominatim retornou status ${response.status}`)
+  }
+
+  const payload = (await response.json()) as Array<{ lat?: string; lon?: string }>
+  if (!Array.isArray(payload) || payload.length === 0) return null
+
+  const first = payload[0]
+  const latitude = toNumber(first.lat)
+  const longitude = toNumber(first.lon)
+  if (latitude === null || longitude === null) return null
+
+  return { latitude, longitude }
+}
+
+export async function geocodeAddressServer(params: GeocodeLookupParams): Promise<GeocodeLookupResult> {
+  const queries = buildGeocodeQueries(params)
+  if (queries.length === 0) {
+    throw new AddressLookupError(400, 'invalid_address', 'Informe ao menos cidade e UF para geocodificar')
+  }
+
+  const triedQueries: string[] = []
+  for (let index = 0; index < queries.length; index += 1) {
+    const candidate = queries[index]
+    triedQueries.push(candidate.query)
+    const result = await searchNominatim(candidate.query)
+    if (!result) continue
+
+    return {
+      latitude: result.latitude,
+      longitude: result.longitude,
+      precision: candidate.precision,
+      query: candidate.query,
+      fallbackUsed: index > 0,
+      notFound: false,
+      triedQueries,
+    }
   }
 
   return {
-    latitude,
-    longitude,
-    source: 'nominatim' as const,
-    precision: resolvePrecision(bestResult),
-    formatted_address: sanitize(bestResult.display_name) || bestMatch.query,
-    query: bestMatch.query,
+    latitude: null,
+    longitude: null,
+    precision: null,
+    query: null,
+    fallbackUsed: false,
+    notFound: true,
+    triedQueries,
   }
 }

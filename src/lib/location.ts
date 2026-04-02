@@ -11,8 +11,12 @@ export interface LocationFields {
 
 export type GeocodePrecision = 'rooftop' | 'street' | 'postal_code' | 'city'
 
-export function normalizeCep(value: string | null | undefined) {
+export function parseCep(value: string | null | undefined) {
   return (value || '').replace(/\D/g, '').slice(0, 8)
+}
+
+export function normalizeCep(value: string | null | undefined) {
+  return parseCep(value)
 }
 
 export function formatCep(value: string | null | undefined) {
@@ -32,6 +36,17 @@ export function buildAddressLine(fields: LocationFields) {
   ].filter(Boolean)
 
   return parts.join(', ')
+}
+
+export function buildFullAddress(fields: LocationFields) {
+  const streetLine = buildAddressLine(fields)
+  const complement = (fields.complement || '').trim()
+  const city = (fields.city || '').trim()
+  const state = (fields.state || '').trim().toUpperCase()
+  const cep = formatCep(fields.cep)
+  const cityState = [city, state].filter(Boolean).join(' - ')
+
+  return [streetLine, complement, cityState, cep].filter(Boolean).join(', ')
 }
 
 export function buildReadableAddress(fields: LocationFields) {
@@ -152,6 +167,10 @@ export function parseCoordinateNumber(value: unknown) {
     return Number.isFinite(parsed) ? parsed : null
   }
   return null
+}
+
+export function ensureNumber(value: unknown) {
+  return parseCoordinateNumber(value)
 }
 
 export function isLatitudeInRange(value: number) {

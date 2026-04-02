@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Save, Plus, Trash2, Clock, CalendarOff, Copy, Check, Upload, Image as ImageIcon, ExternalLink } from 'lucide-react'
-import { supabase, supabaseProjectUrl } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -13,6 +13,7 @@ import { Card } from '../components/ui/Card'
 import { AvatarCropModal } from '../components/ui/AvatarCropModal'
 import { translateError } from '../lib/errorMessages'
 import { getSignedAvatarUrl, uploadShopAvatar, validateAvatarFile, SHOP_AVATARS_BUCKET } from '../lib/avatarStorage'
+import { geocodeAddress, LocationApiError, lookupCep } from '../lib/locationApi'
 import {
   buildReadableAddress,
   buildAddressLine,
@@ -42,15 +43,6 @@ type SupabaseUpdateError = {
   status?: number
 } | null
 
-interface ViaCepResponse {
-  cep?: string
-  logradouro?: string
-  bairro?: string
-  localidade?: string
-  uf?: string
-  erro?: boolean
-}
-
 const WEEKDAYS = [
   { value: 1, label: 'Segunda-feira' },
   { value: 2, label: 'Terça-feira' },
@@ -66,28 +58,6 @@ const BRAZIL_STATES = [
   'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC',
   'SP', 'SE', 'TO',
 ]
-
-const GEOCODE_UNAVAILABLE_TTL_MS = 10 * 60 * 1000
-
-function getGeocodeUnavailableKey() {
-  return `barberage_geocode_unavailable_${supabaseProjectUrl}`
-}
-
-function readGeocodeUnavailable() {
-  const blockedAtRaw = window.localStorage.getItem(getGeocodeUnavailableKey())
-  const blockedAt = Number.parseInt(blockedAtRaw || '', 10)
-  if (!Number.isFinite(blockedAt)) return false
-  const expired = Date.now() - blockedAt >= GEOCODE_UNAVAILABLE_TTL_MS
-  if (expired) {
-    window.localStorage.removeItem(getGeocodeUnavailableKey())
-    return false
-  }
-  return true
-}
-
-function markGeocodeUnavailable() {
-  window.localStorage.setItem(getGeocodeUnavailableKey(), String(Date.now()))
-}
 
 export function SettingsPage() {
   const { currentShop, membership, refreshUserData, user } = useAuth()
@@ -185,7 +155,6 @@ function ShopSettings({
   const [avatarLoading, setAvatarLoading] = useState(false)
   const [cropModalOpen, setCropModalOpen] = useState(false)
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null)
-  const [geocodeEndpointUnavailable, setGeocodeEndpointUnavailable] = useState(false)
   const [cepError, setCepError] = useState('')
   const [cepErrorCode, setCepErrorCode] = useState<'invalid' | 'request' | ''>('')
   const [cepLoading, setCepLoading] = useState(false)
@@ -352,11 +321,6 @@ function ShopSettings({
   }, [shop])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    setGeocodeEndpointUnavailable(readGeocodeUnavailable())
-  }, [shop?.id])
-
-  useEffect(() => {
     const normalizedCep = normalizeCep(cep)
 
     if (normalizedCep.length !== 8) {
@@ -369,8 +333,8 @@ function ShopSettings({
 
     if (latestLookupCep === normalizedCep) return
 
-    const abortController = new AbortController()
     setLatestLookupCep(normalizedCep)
+    let cancelled = false
 
     async function fetchCepData() {
       setCepError('')
@@ -378,21 +342,8 @@ function ShopSettings({
       setCepLoading(true)
 
       try {
-        const response = await fetch(`https://viacep.com.br/ws/${normalizedCep}/json/`, {
-          signal: abortController.signal,
-        })
-
-        if (!response.ok) {
-          throw new Error('request-failed')
-        }
-
-        const data = (await response.json()) as ViaCepResponse
-
-        if (data.erro) {
-          setCepError('CEP inválido')
-          setCepErrorCode('invalid')
-          return
-        }
+        const data = await lookupCep(normalizedCep)
+        if (cancelled) return
 
         const nextStreet = data.logradouro?.trim()
         const nextNeighborhood = data.bairro?.trim()
@@ -403,12 +354,23 @@ function ShopSettings({
         if (nextNeighborhood) setNeighborhood(nextNeighborhood)
         if (nextCity) setCity(nextCity)
         if (nextState) setStateCode(nextState)
-      } catch {
-        if (abortController.signal.aborted) return
-        setCepError('Nao foi possivel buscar o CEP')
+      } catch (error) {
+        if (cancelled) return
+
+        if (error instanceof LocationApiError && (error.code === 'not_found' || error.code === 'invalid_cep')) {
+          setCepError('CEP inválido')
+          setCepErrorCode('invalid')
+          return
+        }
+
+        if (error instanceof LocationApiError && error.code === 'timeout') {
+          setCepError('Consulta de CEP demorou demais. Tente novamente.')
+        } else {
+          setCepError('Nao foi possivel buscar o CEP')
+        }
         setCepErrorCode('request')
       } finally {
-        if (!abortController.signal.aborted) {
+        if (!cancelled) {
           setCepLoading(false)
         }
       }
@@ -417,7 +379,7 @@ function ShopSettings({
     void fetchCepData()
 
     return () => {
-      abortController.abort()
+      cancelled = true
     }
   }, [cep, latestLookupCep])
 
@@ -511,15 +473,12 @@ function ShopSettings({
     const existingCoords = normalizeCoordinates(shop.latitude, shop.longitude, 'current-shop')
     const hasCurrentCoordinates = existingCoords.latitude !== null && existingCoords.longitude !== null
     const addressChanged = currentAddressSignature !== nextAddressSignature
-    const shouldGeocode =
-      hasMinimumAddressForGeocoding({
-        cep: normalizedCep,
-        address_street: normalizedStreet,
-        address_number: normalizedNumber,
-        neighborhood: normalizedNeighborhood,
-        city: normalizedCity,
-        state: normalizedState,
-      }) && (addressChanged || !hasCurrentCoordinates)
+    const hasMinimumGeocodeContext = Boolean(
+      normalizedCep.length === 8 &&
+      normalizedCity &&
+      normalizedState.length === 2
+    )
+    const shouldGeocode = hasMinimumGeocodeContext && (addressChanged || !hasCurrentCoordinates)
 
     setLoading(true)
     setSuccess(false)
@@ -700,115 +659,79 @@ function ShopSettings({
     } as Partial<Shop> & Record<string, unknown>)
 
     try {
-      if (shouldGeocode && !usedLegacyFallback && !geocodeEndpointUnavailable) {
-        const { data: geocodeData, error: geocodeError } = await supabase.functions.invoke('geocode-shop-location', {
-          body: {
-            shopId: shop.id,
-            cep: normalizedCep,
-            city: normalizedCity,
-            state: normalizedState,
-            neighborhood: normalizedNeighborhood,
+      if (shouldGeocode && !usedLegacyFallback) {
+        const geocodeResult = await geocodeAddress({
+          address: buildAddressLine({
             address_street: normalizedStreet,
             address_number: normalizedNumber,
-            address: addressLine || null,
-            complement: normalizedComplement || null,
-            persist: true,
-          },
+            neighborhood: normalizedNeighborhood,
+          }),
+          street: normalizedStreet,
+          number: normalizedNumber,
+          neighborhood: normalizedNeighborhood,
+          city: normalizedCity,
+          state: normalizedState,
+          cep: normalizedCep,
         })
 
-        if (geocodeError) {
-          const geocodeStatusCandidate =
-            Number((geocodeError as { context?: { status?: number }; status?: number }).context?.status) ||
-            Number((geocodeError as { status?: number }).status) ||
-            null
-          const geocodeResponseUrl =
-            (geocodeError as { context?: { url?: string } }).context?.url || `${supabaseProjectUrl}/functions/v1/geocode-shop-location`
-          const geocodeErrorText = `${geocodeError.name || ''} ${geocodeError.message || ''}`.toLowerCase()
-          const isLocationNotFound =
-            geocodeStatusCandidate === 422 || geocodeErrorText.includes('location not found')
-          const isFunction404 = geocodeStatusCandidate === 404 || geocodeErrorText.includes('functions fetch failed')
+        const parsedCoords = normalizeCoordinates(
+          geocodeResult.latitude,
+          geocodeResult.longitude,
+          'settings-geocode-api'
+        )
 
-          if (import.meta.env.DEV) {
-            console.error('[settings][geocode] invoke error', {
-              status: geocodeStatusCandidate,
-              url: geocodeResponseUrl,
-              name: geocodeError.name,
-              message: geocodeError.message,
-              raw: geocodeError,
-            })
+        if (parsedCoords.latitude !== null && parsedCoords.longitude !== null) {
+          const coordsPayload = {
+            latitude: parsedCoords.latitude,
+            longitude: parsedCoords.longitude,
           }
 
-          if (isLocationNotFound) {
-            setGeoWarning('Dados salvos, mas esse endereco nao foi localizado no mapa. Confira rua, numero, cidade e UF.')
-          } else if (isFunction404) {
-            setGeoWarning(
-              `Dados salvos, mas o serviço de geolocalização não foi encontrado (404) em ${geocodeResponseUrl}.`
-            )
-            markGeocodeUnavailable()
-            setGeocodeEndpointUnavailable(true)
+          const coordsUpdateShops = await supabase
+            .from('shops')
+            .update(coordsPayload)
+            .eq('id', shop.id)
+            .select('*')
+            .maybeSingle()
+
+          let coordsUpdateError = (coordsUpdateShops.error as SupabaseUpdateError) || null
+
+          if (coordsUpdateError && isRelationCompatibilityError(coordsUpdateError)) {
+            const coordsUpdateBarbershops = await supabase
+              .from('barbershops')
+              .update(coordsPayload)
+              .eq('id', shop.id)
+              .select('*')
+              .maybeSingle()
+            coordsUpdateError = (coordsUpdateBarbershops.error as SupabaseUpdateError) || null
+          }
+
+          if (coordsUpdateError) {
+            setGeoWarning('Dados salvos, mas não foi possível persistir latitude/longitude.')
           } else {
-            setGeoWarning('Dados salvos, mas não foi possível atualizar a localização no mapa.')
-          }
-        } else {
-          const geocodePayload = (geocodeData || {}) as Record<string, unknown>
-          const parsedCoords = normalizeCoordinates(
-            geocodePayload.latitude,
-            geocodePayload.longitude,
-            'geocode-response'
-          )
-          const nextFormattedAddress =
-            typeof geocodePayload.formatted_address === 'string' ? geocodePayload.formatted_address.trim() : ''
-          const nextGeocodePrecision =
-            normalizeGeocodePrecision(geocodePayload.precision ?? geocodePayload.geocode_precision) || ''
-          const nextGeocodeProvider = readText(geocodePayload.geocode_provider)
-          const nextGeocodedAt = readText(geocodePayload.geocoded_at) || new Date().toISOString()
-          if (parsedCoords.latitude !== null && parsedCoords.longitude !== null) {
             setLatitude(parsedCoords.latitude)
             setLongitude(parsedCoords.longitude)
-            setFormattedAddress(nextFormattedAddress)
-            setGeocodePrecision(nextGeocodePrecision)
-            setGeocodeProvider(nextGeocodeProvider)
-            setGeocodedAt(nextGeocodedAt)
-            if (import.meta.env.DEV) {
-              console.info('[settings][geocode] resolved destination', {
-                shopId: shop.id,
-                lat: parsedCoords.latitude,
-                lng: parsedCoords.longitude,
-                formatted_address:
-                  typeof geocodePayload.formatted_address === 'string' ? geocodePayload.formatted_address : null,
-              })
-            }
-          } else {
-            setGeoWarning('Dados salvos, mas a geolocalização retornou coordenadas inválidas.')
+            setFormattedAddress(buildReadableAddress({
+              cep: normalizedCep,
+              address_street: normalizedStreet,
+              address_number: normalizedNumber,
+              neighborhood: normalizedNeighborhood,
+              city: normalizedCity,
+              state: normalizedState,
+              complement: normalizedComplement,
+            }))
+            setGeocodePrecision(normalizeGeocodePrecision(geocodeResult.precision) || '')
+            setGeocodeProvider('nominatim')
+            setGeocodedAt(new Date().toISOString())
           }
+        } else {
+          setGeoWarning('Dados salvos, mas esse endereco nao foi localizado automaticamente. Ajuste o pin manualmente no cadastro.')
         }
-      } else if (shouldGeocode && !usedLegacyFallback && geocodeEndpointUnavailable) {
-        setGeoWarning('Dados salvos. Geolocalização temporariamente desativada porque o endpoint geocode retornou 404 nesta instalação.')
       }
     } catch (geocodeUnexpectedError) {
-      const geocodeResponseUrl = `${supabaseProjectUrl}/functions/v1/geocode-shop-location`
-      const message =
-        geocodeUnexpectedError instanceof Error
-          ? geocodeUnexpectedError.message
-          : 'Erro inesperado ao atualizar geolocalização.'
-      const normalizedMessage = message.toLowerCase()
-      const isFunction404 = normalizedMessage.includes('404') || normalizedMessage.includes('functions fetch failed')
-
       if (import.meta.env.DEV) {
-        console.error('[settings][geocode] unexpected failure', {
-          url: geocodeResponseUrl,
-          message,
-          raw: geocodeUnexpectedError,
-        })
+        console.error('[settings][geocode-api] unexpected failure', geocodeUnexpectedError)
       }
-
-      if (isFunction404) {
-        setGeoWarning(`Dados salvos, mas o serviço de geolocalização não foi encontrado (404) em ${geocodeResponseUrl}.`)
-        markGeocodeUnavailable()
-        setGeocodeEndpointUnavailable(true)
-      } else {
-        setGeoWarning('Dados salvos, mas não foi possível atualizar a localização no mapa.')
-      }
+      setGeoWarning('Dados salvos, mas não foi possível atualizar a localização no mapa.')
     }
 
     setLoading(false)
