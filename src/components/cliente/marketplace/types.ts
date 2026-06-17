@@ -14,9 +14,11 @@ export type MarketplaceShop = {
   avatarSignedUrl: string | null
   can_book: boolean
   isPreferred: boolean
+  category_slugs: string[]
+  category_names: string[]
+  service_names: string[]
   services_count: number
   professionals_count: number
   statusLabel: string
   reason: string
 }
-

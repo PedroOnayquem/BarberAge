@@ -6,11 +6,11 @@ interface BadgeProps {
 }
 
 const variants = {
-  default: 'border border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[#0f172a] dark:text-[var(--color-text)]',
-  success: 'border border-emerald-500/30 bg-emerald-500/15 text-[#0f172a] dark:text-emerald-200',
-  warning: 'border border-amber-500/35 bg-amber-500/15 text-[#0f172a] dark:text-amber-200',
-  danger: 'border border-[var(--color-primary)]/45 bg-[var(--color-primary-soft)] text-[#0f172a] dark:text-[var(--color-text)]',
-  info: 'border border-[var(--color-accent)]/40 bg-[var(--color-accent-soft)] text-[#0f172a] dark:text-[var(--color-text)]',
+  default: 'border border-[var(--color-border)] bg-white/[0.055] text-[var(--color-text)]',
+  success: 'border border-emerald-500/30 bg-emerald-500/15 text-emerald-200',
+  warning: 'border border-amber-500/35 bg-amber-500/15 text-amber-200',
+  danger: 'border border-[#ff4d9d]/45 bg-[#ff4d9d]/15 text-red-100',
+  info: 'border border-[var(--color-accent)]/40 bg-[var(--color-accent-soft)] text-[var(--color-text)]',
 }
 
 export function Badge({ variant = 'default', children }: BadgeProps) {

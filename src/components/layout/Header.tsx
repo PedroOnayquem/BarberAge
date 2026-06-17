@@ -28,11 +28,11 @@ export function Header({ onMenuClick }: HeaderProps) {
   }, [currentShop?.avatar_url])
 
   return (
-    <header className="relative border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+    <header className="relative border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]/88 backdrop-blur-xl">
       <div className="mx-auto relative flex h-[72px] items-center justify-end px-4 lg:px-6">
         <button
           onClick={onMenuClick}
-          className="absolute left-4 rounded-xl p-2 text-[var(--color-text)] hover:bg-[var(--color-surface-muted)] lg:hidden"
+          className="absolute left-4 rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-2 text-[var(--color-text)] transition-colors hover:bg-white/[0.09] lg:hidden"
           aria-label="Abrir menu"
         >
           <Menu size={20} />
@@ -41,22 +41,22 @@ export function Header({ onMenuClick }: HeaderProps) {
         <div className="flex items-center gap-3">
           <button
             onClick={toggleTheme}
-            className="rounded-xl p-2 text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]"
+            className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-2 text-[var(--color-text)] transition-colors hover:bg-white/[0.09]"
             title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
             aria-label="Alternar tema"
           >
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
 
-          <div className="flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-2.5 py-1.5 shadow-sm">
+          <div className="flex items-center gap-2 rounded-2xl border border-[var(--color-border)] bg-white/[0.055] px-2.5 py-1.5 shadow-[var(--shadow-card)]">
             {shopAvatar ? (
               <img
                 src={shopAvatar}
-                alt="Logo da barbearia"
+                alt="Logo da empresa"
                 className="h-8 w-8 rounded-full object-cover"
               />
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-primary)] text-sm font-bold text-white">
+              <div className="brand-gradient-bg flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white">
                 {user?.email?.charAt(0).toUpperCase() || 'U'}
               </div>
             )}

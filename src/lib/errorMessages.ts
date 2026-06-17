@@ -12,7 +12,7 @@ const errorMap: Record<string, string> = {
   'Auth session missing!': 'Sessão expirada. Faça login novamente.',
   'Email address cannot be used as it is not authorized': 'Este endereço de email não é permitido.',
   'duplicate key value violates unique constraint "services_shop_id_name_key"':
-    'Já existe um serviço com esse nome na sua barbearia.',
+    'Já existe um serviço com esse nome nesta empresa.',
   'duplicate key value violates unique constraint':
     'Registro duplicado. Verifique os dados e tente novamente.',
 }

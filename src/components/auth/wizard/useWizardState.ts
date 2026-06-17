@@ -1,47 +1,26 @@
 import { useEffect, useReducer, useState } from 'react'
 import { normalizeCep } from '../../../lib/location'
 import { normalizePhone } from '../../../lib/phone'
+import { DEFAULT_SERVICE_CATEGORIES, type ServiceCategorySlug } from '../../../lib/serviceCategories'
 
 export const SHOP_SIGNUP_DRAFT_KEY = 'barberage:shop_signup_draft'
 export const TOTAL_WIZARD_STEPS = 6
 
 export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6
 
-export type BusinessType = 'traditional' | 'modern' | 'studio' | 'premium' | 'multi_unit' | null
+export type BusinessCategory = ServiceCategorySlug
 
 export interface BusinessTypeOption {
-  value: Exclude<BusinessType, null>
+  value: BusinessCategory
   title: string
   description: string
 }
 
-export const BUSINESS_TYPE_OPTIONS: BusinessTypeOption[] = [
-  {
-    value: 'traditional',
-    title: 'Barbearia tradicional',
-    description: 'Atendimento classico e agenda simples.',
-  },
-  {
-    value: 'modern',
-    title: 'Barbearia moderna',
-    description: 'Visual atual com servicos diversos.',
-  },
-  {
-    value: 'studio',
-    title: 'Estudio masculino',
-    description: 'Experiencia personalizada para publico masculino.',
-  },
-  {
-    value: 'premium',
-    title: 'Barbearia premium',
-    description: 'Foco em servico de alto padrao.',
-  },
-  {
-    value: 'multi_unit',
-    title: 'Multiplas unidades',
-    description: 'Gestao para rede com mais de uma loja.',
-  },
-]
+export const BUSINESS_TYPE_OPTIONS: BusinessTypeOption[] = DEFAULT_SERVICE_CATEGORIES.map((category) => ({
+  value: category.slug,
+  title: category.name,
+  description: category.description,
+}))
 
 export interface WizardSchedule {
   weekdaysOpen: boolean
@@ -59,7 +38,7 @@ export interface WizardData {
   accountEmail: string
   accountPassword: string
   accountConfirmPassword: string
-  businessType: BusinessType
+  categorySlugs: BusinessCategory[]
   cep: string
   state: string
   city: string
@@ -128,7 +107,7 @@ function createInitialData(): WizardData {
     accountEmail: '',
     accountPassword: '',
     accountConfirmPassword: '',
-    businessType: null,
+    categorySlugs: [],
     cep: '',
     state: '',
     city: '',
@@ -263,7 +242,7 @@ function serializeDraft(state: WizardState): WizardDraftSnapshot {
 
 function hasPersistableDraftContent(data: WizardData) {
   return Boolean(
-    data.businessType ||
+    data.categorySlugs.length > 0 ||
     normalizeCep(data.cep) ||
     data.state.trim() ||
     data.city.trim() ||
@@ -309,9 +288,17 @@ function readDraftFromStorage(): WizardDraftSnapshot | null {
       typeof parsedDraftData.accountEmail === 'string' ? parsedDraftData.accountEmail.trim().toLowerCase() : ''
     const parsedStep = Number(parsed.step)
     if (!Number.isFinite(parsedStep)) return null
+    const legacyDraft = parsedDraftData as Partial<WizardData> & { businessType?: string | null }
+    const categorySlugs =
+      Array.isArray(legacyDraft.categorySlugs) && legacyDraft.categorySlugs.length > 0
+        ? legacyDraft.categorySlugs
+        : legacyDraft.businessType
+          ? ['barbershop']
+          : []
     const hydratedData: WizardData = {
       ...createInitialData(),
       ...parsedDraftData,
+      categorySlugs: categorySlugs as BusinessCategory[],
       accountEmail: parsedDraftEmail,
       accountPassword: '',
       accountConfirmPassword: '',
@@ -404,8 +391,8 @@ export function validateStep(step: WizardStep, data: WizardData, options: Valida
   }
 
   if (step === 2) {
-    if (!data.businessType) {
-      errors.businessType = 'Selecione o tipo da barbearia.'
+    if (data.categorySlugs.length === 0) {
+      errors.categorySlugs = 'Selecione pelo menos uma categoria.'
     }
   }
 
@@ -442,7 +429,7 @@ export function validateStep(step: WizardStep, data: WizardData, options: Valida
       errors.phone = 'Informe um telefone valido com DDD.'
     }
     if (!data.shopName.trim()) {
-      errors.shopName = 'Informe o nome da barbearia.'
+      errors.shopName = 'Informe o nome da empresa.'
     }
   }
 
@@ -512,7 +499,7 @@ function resolveFirstInvalidStep(errors: WizardErrors): WizardStep {
       step: 1,
       fields: ['accountEmail', 'accountPassword', 'accountConfirmPassword'],
     },
-    { step: 2, fields: ['businessType'] },
+    { step: 2, fields: ['categorySlugs'] },
     {
       step: 3,
       fields: ['cep', 'street', 'neighborhood', 'city', 'state', 'number', 'mapConfirmed'],

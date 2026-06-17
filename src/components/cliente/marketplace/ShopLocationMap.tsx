@@ -246,7 +246,7 @@ export function ShopLocationMap({ shop }: ShopLocationMapProps) {
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <button
           onClick={() => setDirectionsOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+          className="brand-gradient-bg inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold text-white transition-all hover:brightness-110"
         >
           <Navigation size={16} />
           Como chegar
@@ -257,7 +257,7 @@ export function ShopLocationMap({ shop }: ShopLocationMapProps) {
             href={wazeUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm font-semibold text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-white/[0.055] px-3 py-2 text-sm font-semibold text-[var(--color-text)] transition-colors hover:bg-white/[0.09]"
           >
             <ExternalLink size={16} />
             Abrir no Waze
@@ -267,7 +267,7 @@ export function ShopLocationMap({ shop }: ShopLocationMapProps) {
             href={googleSearchUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm font-semibold text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-white/[0.055] px-3 py-2 text-sm font-semibold text-[var(--color-text)] transition-colors hover:bg-white/[0.09]"
           >
             <ExternalLink size={16} />
             Abrir no Google Maps
@@ -278,7 +278,7 @@ export function ShopLocationMap({ shop }: ShopLocationMapProps) {
       {!coords && (
         <div className="mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2">
           <p className="text-xs text-[var(--color-text-muted)]">
-            Revise o endereço nas configurações da barbearia para salvar latitude e longitude e habilitar rota interna.
+            Revise o endereço nas configurações da empresa para salvar latitude e longitude e habilitar rota interna.
           </p>
         </div>
       )}

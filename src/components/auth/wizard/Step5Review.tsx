@@ -5,8 +5,11 @@ interface Step5ReviewProps {
   data: WizardData
 }
 
-function getBusinessTypeLabel(value: WizardData['businessType']) {
-  return BUSINESS_TYPE_OPTIONS.find((option) => option.value === value)?.title || 'Nao informado'
+function getCategoryLabels(values: WizardData['categorySlugs']) {
+  if (values.length === 0) return 'Nao informado'
+  return values
+    .map((value) => BUSINESS_TYPE_OPTIONS.find((option) => option.value === value)?.title || value)
+    .join(', ')
 }
 
 function formatCoordinate(value: number | null) {
@@ -27,34 +30,34 @@ export function Step5Review({ data }: Step5ReviewProps) {
 
   return (
     <div className="space-y-3">
-      <article className="rounded-2xl border border-[rgba(148,163,184,0.22)] bg-[rgba(15,23,42,0.72)] p-4">
-        <p className="text-xs uppercase tracking-[0.1em] text-[#94a3b8]">Tipo de barbearia</p>
-        <p className="mt-1 text-sm font-semibold text-[#f8fafc]">{getBusinessTypeLabel(data.businessType)}</p>
+      <article className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-4">
+        <p className="text-xs text-[var(--color-text-muted)]">Categorias</p>
+        <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">{getCategoryLabels(data.categorySlugs)}</p>
       </article>
 
-      <article className="rounded-2xl border border-[rgba(148,163,184,0.22)] bg-[rgba(15,23,42,0.72)] p-4">
-        <p className="text-xs uppercase tracking-[0.1em] text-[#94a3b8]">Responsavel e contato</p>
-        <p className="mt-1 text-sm font-semibold text-[#f8fafc]">{data.ownerName || '--'}</p>
-        <p className="mt-1 text-sm text-[#cbd5e1]">
+      <article className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-4">
+        <p className="text-xs text-[var(--color-text-muted)]">Responsavel e contato</p>
+        <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">{data.ownerName || '--'}</p>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
           {data.shopName || '--'} | {data.phone || '--'}
         </p>
       </article>
 
-      <article className="rounded-2xl border border-[rgba(148,163,184,0.22)] bg-[rgba(15,23,42,0.72)] p-4">
-        <p className="text-xs uppercase tracking-[0.1em] text-[#94a3b8]">Endereco completo</p>
-        <p className="mt-1 text-sm text-[#e2e8f0]">{fullAddress}</p>
+      <article className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-4">
+        <p className="text-xs text-[var(--color-text-muted)]">Endereco completo</p>
+        <p className="mt-1 text-sm text-[var(--color-text)]">{fullAddress}</p>
       </article>
 
-      <article className="rounded-2xl border border-[rgba(148,163,184,0.22)] bg-[rgba(15,23,42,0.72)] p-4">
-        <p className="text-xs uppercase tracking-[0.1em] text-[#94a3b8]">Latitude e longitude</p>
-        <p className="mt-1 text-sm text-[#e2e8f0]">
+      <article className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-4">
+        <p className="text-xs text-[var(--color-text-muted)]">Latitude e longitude</p>
+        <p className="mt-1 text-sm text-[var(--color-text)]">
           {formatCoordinate(data.latitude)}, {formatCoordinate(data.longitude)}
         </p>
       </article>
 
-      <article className="rounded-2xl border border-[rgba(148,163,184,0.22)] bg-[rgba(15,23,42,0.72)] p-4">
-        <p className="text-xs uppercase tracking-[0.1em] text-[#94a3b8]">Configuracoes iniciais</p>
-        <ul className="mt-2 space-y-1 text-sm text-[#e2e8f0]">
+      <article className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-4">
+        <p className="text-xs text-[var(--color-text-muted)]">Configuracoes iniciais</p>
+        <ul className="mt-2 space-y-1 text-sm text-[var(--color-text)]">
           <li>Profissionais: {data.professionalsCount || '0'}</li>
           <li>Intervalo base: {data.slotIntervalMinutes || '--'} min</li>
           <li>Buffer: {data.bufferMinutes || '--'} min</li>

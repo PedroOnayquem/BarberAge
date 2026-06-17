@@ -84,7 +84,7 @@ export function ClientProfilePage() {
 
   async function handleAvatarCropped(croppedFile: File) {
     if (!clientUser || !clientShop || !clientProfile || !user?.id) {
-      setAvatarError('Complete seu cadastro em uma barbearia para alterar foto de perfil.')
+      setAvatarError('Complete seu cadastro em uma empresa para alterar foto de perfil.')
       return
     }
     setAvatarLoading(true)

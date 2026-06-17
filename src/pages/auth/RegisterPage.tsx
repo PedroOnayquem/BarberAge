@@ -108,10 +108,10 @@ export function RegisterPage() {
         icon={
           success
             ? <CheckCircle size={30} />
-            : <img src="/apple-touch-icon.png" alt="Ícone BarberAge" className="h-8 w-8 object-contain" />
+            : <img src="/apple-touch-icon.png" alt="BarberAge" className="h-8 w-8 object-contain" />
         }
-        title="BARBERAGE"
-        subtitle={success ? 'Verifique seu email' : 'Cadastro Barbearia'}
+        title={success ? 'Quase lá' : 'Cadastrar empresa'}
+        subtitle={success ? 'Verifique seu email' : 'Crie seu acesso para oferecer serviços online'}
       >
         {success ? (
           <section className="space-y-6 text-center">
@@ -120,8 +120,8 @@ export function RegisterPage() {
               link para ativar sua conta.
             </p>
             <Link
-              to="/register"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+              to="/login"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
             >
               <ArrowLeft size={14} />
               Voltar para o login
@@ -130,7 +130,7 @@ export function RegisterPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
+              <div className="rounded-2xl border border-[#ff4d9d]/35 bg-[#ff4d9d]/10 px-3 py-2 text-sm text-red-100">
                 {error}
               </div>
             )}
@@ -173,8 +173,8 @@ export function RegisterPage() {
             <p className="text-center text-xs text-[var(--color-text-muted)]">
               Ja tem conta?{' '}
               <Link
-                to="/register"
-                className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
+              to="/login"
+                className="font-semibold text-[var(--color-accent)] hover:text-[var(--color-text)]"
               >
                 Entrar
               </Link>

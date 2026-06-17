@@ -37,7 +37,7 @@ function DraftActions({
 }) {
   return (
     <section className="rounded-2xl border border-[rgba(191,219,254,0.32)] bg-[rgba(15,23,42,0.72)] p-4">
-      <p className="text-sm font-semibold text-[#f8fafc]">Continuar cadastro da barbearia</p>
+      <p className="text-sm font-semibold text-[#f8fafc]">Continuar cadastro da empresa</p>
       <p className="mt-1 text-xs text-[#cbd5e1]">
         Encontramos um rascunho para <strong>{pendingDraftEmail}</strong>
         {pendingDraftSavedAt ? ` salvo em ${pendingDraftSavedAt}.` : '.'}
@@ -93,7 +93,7 @@ export function Step1Account({
               <p className="text-sm font-semibold text-[#f0fdf4]">Conta autenticada</p>
               <p className="text-xs text-[#bbf7d0]">
                 Voce ja esta logado como <strong>{currentEmail || 'usuario autenticado'}</strong>. Clique em
-                continuar para prosseguir com o cadastro da barbearia.
+                continuar para prosseguir com o cadastro da empresa.
               </p>
               <button
                 type="button"
@@ -128,7 +128,7 @@ export function Step1Account({
             {verificationMessage || (
               <>
                 A conta para <strong>{verificationEmail}</strong> ja foi criada. Confirme o email e depois entre para
-                continuar o cadastro da barbearia.
+                continuar o cadastro da empresa.
               </>
             )}
           </p>
@@ -189,7 +189,7 @@ export function Step1Account({
       )}
 
       <p className="text-xs text-[#94a3b8]">
-        Esta etapa acontece em <code>/create-shop</code>. Depois de criar a conta, voce segue para os dados da barbearia.
+        Esta etapa acontece em <code>/create-shop</code>. Depois de criar a conta, voce segue para os dados da empresa.
       </p>
     </div>
   )

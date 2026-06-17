@@ -65,7 +65,7 @@ export function DatePickerField({
               setOpen(true)
             }
           }}
-          className={`w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-input-bg)] px-3.5 pb-2 pt-5 text-left text-sm text-[var(--color-text)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/25 disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] px-3.5 pb-2 pt-5 text-left text-sm text-[var(--color-text)] transition-all focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/25 disabled:cursor-not-allowed disabled:opacity-60 ${
             error ? 'border-red-500' : ''
           }`}
           aria-haspopup="dialog"
@@ -75,7 +75,7 @@ export function DatePickerField({
           <span className={displayValue ? '' : 'text-transparent'}>{displayValue || label}</span>
         </button>
 
-        <label className="outlined-field-label pointer-events-none absolute left-3 top-0 -translate-y-1/2 px-1 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+        <label className="outlined-field-label pointer-events-none absolute left-3 top-0 -translate-y-1/2 px-2 text-xs font-semibold text-[var(--color-text-muted)]">
           {label}
         </label>
 

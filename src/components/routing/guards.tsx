@@ -45,8 +45,8 @@ function resolveHomePath(auth: ReturnType<typeof useAuth>) {
   if (!auth.user) return '/login'
 
   const appRole = resolveAppRole(auth.userRole, auth.user)
-  if (appRole === 'client') return '/cliente/barbearias'
-  if (appRole !== 'shop') return '/login'
+  if (appRole === 'client') return '/cliente/empresas'
+  if (appRole !== 'shop') return '/cliente/empresas'
 
   return resolveShopConfigured(auth) ? '/app/dashboard' : '/create-shop'
 }
@@ -87,11 +87,11 @@ export function ProtectedRoute({ role, shopState = 'any', children }: ProtectedR
     if (appRole === 'shop') {
       return <Navigate to={hasConfiguredShop ? '/app/dashboard' : '/create-shop'} replace />
     }
-    if (appRole !== 'client') return <Navigate to="/login" replace />
+    if (appRole !== 'client' && appRole !== null) return <Navigate to="/login" replace />
   }
 
   if (role === 'shop') {
-    if (appRole === 'client') return <Navigate to="/cliente/barbearias" replace />
+    if (appRole === 'client' || appRole === null) return <Navigate to="/cliente/empresas" replace />
     if (appRole !== 'shop') return <Navigate to="/login" replace />
   }
 

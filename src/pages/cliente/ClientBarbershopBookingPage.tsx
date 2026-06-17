@@ -126,7 +126,7 @@ export function ClientBarbershopBookingPage() {
     const candidates = await fetchShopCandidatesBySlug(shopSlug)
     if (candidates.length === 0) {
       setShop(null)
-      setCatalogError('Não foi possível localizar esta barbearia agora.')
+      setCatalogError('Não foi possível localizar esta empresa agora.')
       setLoading(false)
       return
     }
@@ -147,7 +147,7 @@ export function ClientBarbershopBookingPage() {
     }
 
     if (selectedCatalog.servicesError || selectedCatalog.professionalsError) {
-      setCatalogError('Não foi possível carregar serviços e profissionais desta barbearia agora.')
+      setCatalogError('Não foi possível carregar serviços e profissionais desta empresa agora.')
       if (import.meta.env.DEV) {
         console.error('[client-booking-by-slug] catalog load error', {
           servicesError: selectedCatalog.servicesError,
@@ -178,7 +178,7 @@ export function ClientBarbershopBookingPage() {
       setAvatarUrl(null)
       setServices([])
       setProfessionals([])
-      setCatalogError('Não foi possível localizar esta barbearia agora.')
+      setCatalogError('Não foi possível localizar esta empresa agora.')
       setLoading(false)
       return
     }
@@ -341,9 +341,9 @@ export function ClientBarbershopBookingPage() {
   if (!shop) {
     return (
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-8 text-center">
-        <h1 className="text-xl font-bold text-[var(--color-text)]">Barbearia não encontrada</h1>
+        <h1 className="text-xl font-bold text-[var(--color-text)]">Empresa não encontrada</h1>
         <p className="mt-2 text-sm text-[var(--color-text-muted)]">Verifique o link e tente novamente.</p>
-        <Link to="/cliente/barbearias" className="mt-5 inline-flex text-sm font-medium text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]">
+        <Link to="/cliente/empresas" className="mt-5 inline-flex text-sm font-medium text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]">
           Voltar para listagem
         </Link>
       </div>
@@ -352,9 +352,9 @@ export function ClientBarbershopBookingPage() {
 
   return (
       <div className="space-y-4 px-4 py-4 sm:px-5 md:px-0 md:py-0">
-        <Link to="/cliente/barbearias" className="inline-flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+        <Link to="/cliente/empresas" className="inline-flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
           <ChevronLeft size={16} />
-          Voltar para barbearias
+          Voltar para empresas
         </Link>
 
         {catalogError && (
@@ -389,7 +389,7 @@ export function ClientBarbershopBookingPage() {
           <h2 className="mb-3 text-base font-semibold text-[var(--color-text)]">1. Serviço</h2>
           {!hasServices ? (
             <p className="text-sm text-[var(--color-text-muted)]">
-              Esta barbearia não possui serviços ativos. Solicite ao estabelecimento para configurar o catálogo.
+              Esta empresa não possui serviços ativos. Solicite ao estabelecimento para configurar o catálogo.
             </p>
           ) : (
             <div className="space-y-2">
@@ -415,7 +415,7 @@ export function ClientBarbershopBookingPage() {
           <h2 className="mb-3 text-base font-semibold text-[var(--color-text)]">2. Profissional</h2>
           {!hasProfessionals ? (
             <p className="text-sm text-[var(--color-text-muted)]">
-              Esta barbearia está sem profissionais ativos. Tente outra barbearia ou volte mais tarde.
+              Esta empresa está sem profissionais ativos. Tente outra empresa ou volte mais tarde.
             </p>
           ) : (
             <div className="space-y-2">
@@ -460,7 +460,7 @@ export function ClientBarbershopBookingPage() {
           )}
           {selectedService && !hasProfessionals && (
             <p className="text-sm text-[var(--color-text-muted)]">
-              Não há profissionais disponíveis para gerar horários nesta barbearia.
+              Não há profissionais disponíveis para gerar horários nesta empresa.
             </p>
           )}
           {selectedService && hasProfessionals && !selectedProfessional && (

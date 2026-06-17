@@ -249,7 +249,7 @@ export function AvatarCropModal({
             </div>
 
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Preview</p>
+              <p className="text-xs font-semibold text-[var(--color-text-muted)]">Preview</p>
               <div className="flex justify-center">
                 {previewUrl ? (
                   <img

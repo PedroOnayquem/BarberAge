@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, ChevronLeft, Clock, Scissors, User } from 'lucide-react'
+import { Briefcase, Check, ChevronLeft, Clock, User } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Button } from '../../components/ui/Button'
@@ -67,7 +67,7 @@ export function ClientBookingPage() {
     ])
 
     if (sRes.error || pRes.error) {
-      setCatalogError('Não foi possível carregar o catálogo desta barbearia agora.')
+      setCatalogError('Não foi possível carregar o catálogo desta empresa agora.')
       if (import.meta.env.DEV) {
         console.error('[client-booking] catalog load error', {
           servicesError: sRes.error,
@@ -186,7 +186,7 @@ export function ClientBookingPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#b11226] border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
       </div>
     )
   }
@@ -194,14 +194,14 @@ export function ClientBookingPage() {
   if (bookingSuccess) {
     return (
       <div className="flex flex-col items-center py-16 text-center">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#e9eef8]">
-          <Check className="h-8 w-8 text-[#0a1f44]" />
+        <div className="brand-gradient-bg mb-4 flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-[0_18px_42px_rgba(123,97,255,0.28)]">
+          <Check className="h-8 w-8" />
         </div>
-        <h2 className="text-xl font-bold text-[#0a1f44]">Agendamento realizado!</h2>
-        <p className="mt-2 text-sm text-[#6b7a95]">
+        <h2 className="text-xl font-bold text-[var(--color-text)]">Agendamento realizado!</h2>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">
           {formatLongDateTimeInTimeZone(selectedSlot!.slot_start, clientShop?.timezone || 'America/Sao_Paulo')}
         </p>
-        <p className="text-sm text-[#6b7a95]">
+        <p className="text-sm text-[var(--color-text-muted)]">
           com {selectedProfessional?.name}
         </p>
         <Button className="mt-6" onClick={resetBooking}>Fazer novo agendamento</Button>
@@ -212,15 +212,15 @@ export function ClientBookingPage() {
   if (!shopId || !clientUser) {
     return (
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-6 text-center">
-        <h1 className="text-lg font-bold text-[var(--color-text)]">Selecione uma barbearia para agendar</h1>
+        <h1 className="text-lg font-bold text-[var(--color-text)]">Selecione uma empresa para agendar</h1>
         <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-          Não encontramos uma barbearia vinculada ao seu perfil nesta tela.
+          Não encontramos uma empresa vinculada ao seu perfil nesta tela.
         </p>
         <Link
-          to="/cliente/barbearias"
-          className="mt-4 inline-flex rounded-xl bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-accent-hover)]"
+          to="/cliente/empresas"
+        className="brand-gradient-bg mt-4 inline-flex rounded-2xl px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
         >
-          Ver barbearias
+          Ver empresas
         </Link>
       </div>
     )
@@ -229,8 +229,8 @@ export function ClientBookingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#0a1f44]">Agendar</h1>
-        <p className="mt-1 text-sm text-[#6b7a95]">
+        <h1 className="text-2xl font-bold text-[var(--color-text)]">Agendar</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
           Escolha o serviço, profissional e horário
         </p>
       </div>
@@ -248,8 +248,8 @@ export function ClientBookingPage() {
             key={s}
             className={`h-1 flex-1 rounded-full ${
               i <= ['service', 'professional', 'datetime', 'confirm'].indexOf(step)
-                ? 'bg-[#b11226]'
-                : 'bg-[#e8edf5]'
+                ? 'brand-gradient-bg'
+                : 'bg-white/[0.08]'
             }`}
           />
         ))}
@@ -258,8 +258,8 @@ export function ClientBookingPage() {
       {/* Step 1: Select services */}
       {step === 'service' && (
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-[#0a1f44]">
-            <Scissors className="mr-2 inline h-5 w-5" />
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">
+            <Briefcase className="mr-2 inline h-5 w-5" />
             Selecione os serviços
           </h2>
           {services.map((service) => {
@@ -270,22 +270,22 @@ export function ClientBookingPage() {
                 onClick={() => toggleService(service)}
                 className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition-all ${
                   isSelected
-                    ? 'border-[#b11226] bg-[#f1f4f8]'
-                    : 'border-[#dbe2ec] bg-white hover:border-[#cfd8e6]'
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
+                    : 'border-[var(--color-border)] bg-white/[0.055] hover:border-[var(--color-border-strong)] hover:bg-white/[0.08]'
                 }`}
               >
                 <div>
-                  <p className="font-medium text-[#0a1f44]">{service.name}</p>
-                  <p className="text-sm text-[#6b7a95]">
+                  <p className="font-medium text-[var(--color-text)]">{service.name}</p>
+                  <p className="text-sm text-[var(--color-text-muted)]">
                     {service.duration_minutes} min
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-semibold text-[#0a1f44]">
+                  <span className="font-semibold text-[var(--color-text)]">
                     R$ {Number(service.price).toFixed(2)}
                   </span>
                   {isSelected && (
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#b11226]">
+                    <div className="brand-gradient-bg flex h-6 w-6 items-center justify-center rounded-full">
                       <Check className="h-4 w-4 text-white" />
                     </div>
                   )}
@@ -298,10 +298,10 @@ export function ClientBookingPage() {
             <Card>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-[#6b7a95]">
+                  <p className="text-sm text-[var(--color-text-muted)]">
                     {selectedServices.length} serviço(s) · {totalDuration} min
                   </p>
-                  <p className="text-lg font-bold text-[#0a1f44]">
+                  <p className="text-lg font-bold text-[var(--color-text)]">
                     R$ {totalPrice.toFixed(2)}
                   </p>
                 </div>
@@ -316,10 +316,10 @@ export function ClientBookingPage() {
       {step === 'professional' && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <button onClick={() => setStep('service')} className="text-[#8b9bb8] hover:text-[#425a7f]">
+            <button onClick={() => setStep('service')} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
               <ChevronLeft size={20} />
             </button>
-            <h2 className="text-lg font-semibold text-[#0a1f44]">
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">
               <User className="mr-2 inline h-5 w-5" />
               Escolha o profissional
             </h2>
@@ -328,13 +328,13 @@ export function ClientBookingPage() {
             <button
               key={prof.id}
               onClick={() => handleProfessionalSelect(prof)}
-              className="flex w-full items-center gap-4 rounded-xl border border-[#dbe2ec] bg-white p-4 text-left transition-all hover:border-[#b11226] hover:shadow-sm"
+              className="flex w-full items-center gap-4 rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-4 text-left transition-all hover:border-[var(--color-border-strong)] hover:bg-white/[0.08]"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e9eef8] text-lg font-bold text-[#0a1f44]">
+              <div className="brand-gradient-soft flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 text-lg font-bold text-[var(--color-text)]">
                 {prof.name.charAt(0).toUpperCase()}
               </div>
               <div>
-                <p className="font-medium text-[#0a1f44]">{prof.name}</p>
+                <p className="font-medium text-[var(--color-text)]">{prof.name}</p>
               </div>
             </button>
           ))}
@@ -345,10 +345,10 @@ export function ClientBookingPage() {
       {step === 'datetime' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <button onClick={() => setStep('professional')} className="text-[#8b9bb8] hover:text-[#425a7f]">
+            <button onClick={() => setStep('professional')} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
               <ChevronLeft size={20} />
             </button>
-            <h2 className="text-lg font-semibold text-[#0a1f44]">
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">
               <Clock className="mr-2 inline h-5 w-5" />
               Escolha data e horário
             </h2>
@@ -364,17 +364,17 @@ export function ClientBookingPage() {
           {/* Time slots */}
           {slotsLoading ? (
             <div className="flex items-center justify-center py-10">
-              <div className="h-6 w-6 animate-spin rounded-full border-4 border-[#b11226] border-t-transparent" />
+              <div className="h-6 w-6 animate-spin rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
             </div>
           ) : slotsError ? (
             <Card>
-              <p className="py-6 text-center text-sm text-[#8b9bb8]">
+              <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">
                 {slotsError}
               </p>
             </Card>
           ) : slots.length === 0 ? (
             <Card>
-              <p className="py-6 text-center text-sm text-[#8b9bb8]">
+              <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">
                 Nenhum horário disponível nesta data. Tente outra data.
               </p>
             </Card>
@@ -388,8 +388,8 @@ export function ClientBookingPage() {
                     onClick={() => setSelectedSlot(slot)}
                     className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
                       isSelected
-                        ? 'border-[#b11226] bg-[#f1f4f8] text-[#0a1f44]'
-                        : 'border-[#dbe2ec] bg-white text-[#1f3760] hover:border-[#cfd8e6]'
+                          ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                        : 'border-[var(--color-border)] bg-white/[0.055] text-[var(--color-text)] hover:border-[var(--color-border-strong)] hover:bg-white/[0.08]'
                     }`}
                   >
                     {formatTimeInTimeZone(slot.slot_start, clientShop?.timezone || 'America/Sao_Paulo')}
@@ -411,43 +411,43 @@ export function ClientBookingPage() {
       {step === 'confirm' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <button onClick={() => setStep('datetime')} className="text-[#8b9bb8] hover:text-[#425a7f]">
+            <button onClick={() => setStep('datetime')} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
               <ChevronLeft size={20} />
             </button>
-            <h2 className="text-lg font-semibold text-[#0a1f44]">Confirmar agendamento</h2>
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">Confirmar agendamento</h2>
           </div>
 
           <Card>
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-medium uppercase text-[#8b9bb8]">Serviços</p>
+                <p className="text-xs font-medium text-[var(--color-text-muted)]">Serviços</p>
                 {selectedServices.map((s) => (
-                  <p key={s.id} className="text-sm text-[#0a1f44]">
+                  <p key={s.id} className="text-sm text-[var(--color-text)]">
                     {s.name} — R$ {Number(s.price).toFixed(2)}
                   </p>
                 ))}
               </div>
               <div>
-                <p className="text-xs font-medium uppercase text-[#8b9bb8]">Profissional</p>
-                <p className="text-sm text-[#0a1f44]">{selectedProfessional?.name}</p>
+                <p className="text-xs font-medium text-[var(--color-text-muted)]">Profissional</p>
+                <p className="text-sm text-[var(--color-text)]">{selectedProfessional?.name}</p>
               </div>
               <div>
-                <p className="text-xs font-medium uppercase text-[#8b9bb8]">Data e horário</p>
-                <p className="text-sm text-[#0a1f44]">
+                <p className="text-xs font-medium text-[var(--color-text-muted)]">Data e horário</p>
+                <p className="text-sm text-[var(--color-text)]">
                   {selectedSlot && formatLongDateTimeInTimeZone(selectedSlot.slot_start, clientShop?.timezone || 'America/Sao_Paulo')}
                 </p>
               </div>
-              <div className="border-t border-[#e8edf5] pt-3">
+              <div className="border-t border-[var(--color-border)] pt-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-[#6b7a95]">Total ({totalDuration} min)</p>
-                  <p className="text-lg font-bold text-[#0a1f44]">R$ {totalPrice.toFixed(2)}</p>
+                  <p className="text-sm text-[var(--color-text-muted)]">Total ({totalDuration} min)</p>
+                  <p className="text-lg font-bold text-[var(--color-text)]">R$ {totalPrice.toFixed(2)}</p>
                 </div>
               </div>
             </div>
           </Card>
 
           {bookingError && (
-            <div className="rounded-lg bg-[#fdecef] p-3 text-sm text-[#b11226]">
+            <div className="rounded-2xl border border-[#ff4d9d]/35 bg-[#ff4d9d]/10 p-3 text-sm text-red-100">
               {bookingError}
             </div>
           )}

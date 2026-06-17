@@ -21,15 +21,15 @@ export function CategoryTabs({ categories, activeCategory, onCategoryChange }: C
               key={category.id}
               type="button"
               onClick={() => onCategoryChange(category.id)}
-              className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+              className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-semibold transition-all ${
                 isActive
-                  ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]'
-                  : 'border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)]'
+                  ? 'brand-gradient-bg border-white/20 text-white shadow-[0_12px_24px_rgba(123,97,255,0.18)]'
+                  : 'border-[var(--color-border)] bg-white/[0.055] text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)] hover:bg-white/[0.08]'
               }`}
             >
               {category.label}
               {typeof category.count === 'number' && (
-                <span className={`ml-1 ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`}>
+                <span className={`ml-1 ${isActive ? 'text-white/78' : 'text-[var(--color-text-muted)]'}`}>
                   ({category.count})
                 </span>
               )}

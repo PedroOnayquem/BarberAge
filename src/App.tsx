@@ -30,7 +30,9 @@ function AppRoutes() {
       <Route path="/" element={<RootRedirect />} />
 
       {/* Public marketplace routes */}
-      <Route path="/barbearias" element={<BarbershopsPage />} />
+      <Route path="/empresas" element={<BarbershopsPage />} />
+      <Route path="/empresas/:slug" element={<BarbershopPublicPage />} />
+      <Route path="/barbearias" element={<Navigate to="/empresas" replace />} />
       <Route path="/barbearias/:slug" element={<BarbershopPublicPage />} />
 
       {/* Public routes */}
@@ -54,9 +56,11 @@ function AppRoutes() {
 
       {/* Client routes (/cliente/*) */}
       <Route path="/cliente" element={<ProtectedRoute role="client"><ClientMobileLayout /></ProtectedRoute>}>
-        <Route index element={<Navigate to="/cliente/barbearias" replace />} />
-        <Route path="barbearias" element={<ClientBarbershopsPage />} />
+        <Route index element={<Navigate to="/cliente/empresas" replace />} />
+        <Route path="empresas" element={<ClientBarbershopsPage />} />
         <Route path="buscar" element={<ClientSearchPage />} />
+        <Route path="empresas/:slug" element={<ClientBarbershopBookingPage />} />
+        <Route path="barbearias" element={<Navigate to="/cliente/empresas" replace />} />
         <Route path="barbearias/:slug" element={<ClientBarbershopBookingPage />} />
         <Route path="agendar" element={<ClientBookingPage />} />
         <Route path="agendamentos" element={<ClientAppointmentsPage />} />

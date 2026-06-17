@@ -90,10 +90,10 @@ export function ClientAppointmentsPage() {
         <div className="space-y-2 py-4 text-center">
           <h2 className="text-lg font-semibold text-[var(--color-text)]">Nenhum agendamento ainda</h2>
           <p className="text-sm text-[var(--color-text-muted)]">
-            Explore barbearias e faça seu primeiro agendamento.
+            Explore empresas locais e faça seu primeiro agendamento.
           </p>
-          <Button onClick={() => navigate('/cliente/barbearias')}>
-            Explorar barbearias
+          <Button onClick={() => navigate('/cliente/empresas')}>
+            Explorar empresas
           </Button>
         </div>
       </Card>

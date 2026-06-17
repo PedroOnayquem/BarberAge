@@ -301,7 +301,7 @@ export function AppointmentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-[var(--color-text)]">Agenda</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Gerencie os agendamentos da barbearia
+            Gerencie os agendamentos da empresa
           </p>
         </div>
         <Button onClick={openNewAppointment}>
@@ -496,7 +496,7 @@ export function AppointmentsPage() {
                   ? slotsError
                   : availableTimeOptions.length === 0
                   ? 'Nenhum horário disponível para esta combinação.'
-                  : 'Horários livres calculados pela agenda da barbearia.'
+                  : 'Horários livres calculados pela agenda da empresa.'
               }
             />
           </div>

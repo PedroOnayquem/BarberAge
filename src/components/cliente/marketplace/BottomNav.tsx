@@ -7,11 +7,11 @@ interface BottomNavProps {
 
 export function BottomNav({ onSearchClick }: BottomNavProps) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--color-border)] bg-[var(--color-bg-elevated)]/95 backdrop-blur md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--color-border)] bg-[var(--color-bg-elevated)]/90 backdrop-blur-xl md:hidden">
       <div className="mx-auto grid max-w-3xl grid-cols-4 px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-2">
         <Link
-          to="/cliente/barbearias"
-          className="flex flex-col items-center gap-1 py-1.5 text-[10px] font-semibold text-[var(--color-primary)]"
+          to="/cliente/empresas"
+          className="brand-gradient-bg flex flex-col items-center gap-1 rounded-2xl py-1.5 text-[10px] font-semibold text-white shadow-[0_10px_24px_rgba(123,97,255,0.22)]"
         >
           <Home size={19} />
           Início
@@ -20,7 +20,7 @@ export function BottomNav({ onSearchClick }: BottomNavProps) {
         <button
           type="button"
           onClick={onSearchClick}
-          className="flex flex-col items-center gap-1 py-1.5 text-[10px] font-semibold text-[var(--color-text-muted)]"
+          className="flex flex-col items-center gap-1 rounded-2xl py-1.5 text-[10px] font-semibold text-[var(--color-text-muted)]"
         >
           <Search size={19} />
           Buscar
@@ -28,7 +28,7 @@ export function BottomNav({ onSearchClick }: BottomNavProps) {
 
         <Link
           to="/cliente/agendamentos"
-          className="flex flex-col items-center gap-1 py-1.5 text-[10px] font-semibold text-[var(--color-text-muted)]"
+          className="flex flex-col items-center gap-1 rounded-2xl py-1.5 text-[10px] font-semibold text-[var(--color-text-muted)]"
         >
           <CalendarCheck2 size={19} />
           Agendamentos
@@ -36,7 +36,7 @@ export function BottomNav({ onSearchClick }: BottomNavProps) {
 
         <Link
           to="/cliente/agendamentos"
-          className="flex flex-col items-center gap-1 py-1.5 text-[10px] font-semibold text-[var(--color-text-muted)]"
+          className="flex flex-col items-center gap-1 rounded-2xl py-1.5 text-[10px] font-semibold text-[var(--color-text-muted)]"
         >
           <UserRound size={19} />
           Perfil
@@ -45,4 +45,3 @@ export function BottomNav({ onSearchClick }: BottomNavProps) {
     </nav>
   )
 }
-

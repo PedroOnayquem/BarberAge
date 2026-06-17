@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Building2, User, ArrowLeft, Sparkles } from 'lucide-react'
+import { Building2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getAuthNextPath, redirectAfterAuth, setLastAuthLoginMode, withAuthNextPath } from '../../lib/authFlow'
 import { translateError } from '../../lib/errorMessages'
@@ -9,11 +9,20 @@ import { AuthCard } from '../../components/auth/AuthCard'
 import { FormField } from '../../components/auth/FormField'
 import { PrimaryButton } from '../../components/auth/PrimaryButton'
 
-type LoginMode = 'select' | 'shop' | 'client'
+function resolvePostLoginPath(params: {
+  hasCompany: boolean
+  nextPath: string | null
+}) {
+  const { hasCompany, nextPath } = params
+  if (hasCompany) {
+    return nextPath?.startsWith('/app') ? nextPath : '/app/dashboard'
+  }
+  if (nextPath?.startsWith('/cliente') || nextPath?.startsWith('/empresas')) return nextPath
+  return '/cliente/empresas'
+}
 
 export function LoginPage() {
   const location = useLocation()
-  const [mode, setMode] = useState<LoginMode>('select')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -40,31 +49,27 @@ export function LoginPage() {
 
     setLoading(true)
 
-    const { data: sessionData } = await supabase.auth.getSession()
-    const activeEmail = sessionData.session?.user?.email?.trim().toLowerCase() || null
-    if (activeEmail && activeEmail !== normalizedEmail) {
-      await supabase.auth.signOut()
-    }
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const activeEmail = sessionData.session?.user?.email?.trim().toLowerCase() || null
+      if (activeEmail && activeEmail !== normalizedEmail) {
+        await supabase.auth.signOut()
+      }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
-    if (error) {
-      setError(translateError(error.message))
-      setLoading(false)
-      return
-    }
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      })
 
-    if (!data.user) {
-      setError('Erro ao fazer login')
-      setLoading(false)
-      return
-    }
+      if (signInError) {
+        setError(translateError(signInError.message))
+        return
+      }
 
-    if (mode === 'shop') {
-      const userMeta = (data.user.user_metadata || {}) as Record<string, unknown>
-      const isClientOnlyAccount =
-        (userMeta.role === 'client' || userMeta.account_type === 'client') &&
-        userMeta.role !== 'shop' &&
-        userMeta.account_type !== 'shop'
+      if (!data.user) {
+        setError('Erro ao fazer login')
+        return
+      }
 
       const { data: members, error: membersError } = await supabase
         .from('shop_members')
@@ -73,183 +78,81 @@ export function LoginPage() {
         .limit(1)
 
       if (membersError) {
-        setError(translateError(membersError.message || 'Não foi possível validar sua conta de barbearia agora.'))
-        setLoading(false)
+        setError(translateError(membersError.message || 'Não foi possível validar seu perfil agora.'))
         return
       }
 
-      if ((!members || members.length === 0) && isClientOnlyAccount) {
-        setError('Esta conta está cadastrada como cliente. Use o acesso de cliente.')
-        await supabase.auth.signOut()
-        setLoading(false)
-        return
-      }
-
-      setLastAuthLoginMode('shop')
-      redirectAfterAuth(members && members.length > 0 ? '/app/dashboard' : '/create-shop')
-      return
+      const hasCompany = Boolean(members && members.length > 0)
+      setLastAuthLoginMode(hasCompany ? 'shop' : 'client')
+      redirectAfterAuth(resolvePostLoginPath({ hasCompany, nextPath }))
+    } finally {
+      setLoading(false)
     }
-
-    const userMeta = (data.user.user_metadata || {}) as Record<string, unknown>
-    const isClientByMetadata =
-      userMeta.role === 'client' || userMeta.account_type === 'client'
-
-    if (!isClientByMetadata) {
-      const { data: clientUsers, error: clientUsersError } = await supabase
-        .from('client_users')
-        .select('id')
-        .eq('user_id', data.user.id)
-        .limit(1)
-
-      if (clientUsersError) {
-        setError(translateError(clientUsersError.message || 'Não foi possível validar sua conta de cliente agora.'))
-        setLoading(false)
-        return
-      }
-
-      if (!clientUsers || clientUsers.length === 0) {
-        setError('Esta conta não está cadastrada como cliente. Cadastre-se primeiro.')
-        await supabase.auth.signOut()
-        setLoading(false)
-        return
-      }
-    }
-
-    setLastAuthLoginMode('client')
-    redirectAfterAuth(nextPath || '/cliente/barbearias')
   }
-
-  const subtitle =
-    mode === 'select'
-      ? 'Selecione seu perfil'
-      : mode === 'shop'
-        ? 'Acesso Barbearia'
-        : 'Acesso Cliente'
 
   return (
     <AuthLayout>
       <AuthCard
-        icon={<img src="/apple-touch-icon.png" alt="Ícone BarberAge" className="h-8 w-8 object-contain" />}
-        title="BARBERAGE"
-        subtitle={subtitle}
+        title="Bem-vindo"
+        subtitle="Acesse sua conta"
       >
-        {mode === 'select' ? (
-          <section className="space-y-4">
-            <p className="text-center text-sm text-[var(--color-text-muted)]">Selecione seu perfil de acesso</p>
-
-            <button
-              onClick={() => setMode('shop')}
-              className="flex w-full items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-5 py-4 text-left text-[var(--color-text)] transition-all duration-200 hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-muted)]"
-            >
-              <div className="flex items-center gap-3">
-                <Building2 size={18} className="text-[var(--color-text)]" />
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.08em]">Barbearia</p>
-                  <p className="text-xs text-[var(--color-text-muted)]">Painel administrativo</p>
-                </div>
-              </div>
-              <Sparkles size={15} className="text-[var(--color-primary)]" />
-            </button>
-
-            <button
-              onClick={() => setMode('client')}
-              className="flex w-full items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-5 py-4 text-left text-[var(--color-text)] transition-all duration-200 hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-muted)]"
-            >
-              <div className="flex items-center gap-3">
-                <User size={18} className="text-[var(--color-text)]" />
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.08em]">Cliente</p>
-                  <p className="text-xs text-[var(--color-text-muted)]">Agendamento online</p>
-                </div>
-              </div>
-              <Sparkles size={15} className="text-[var(--color-primary)]" />
-            </button>
-
-            <p className="pt-3 text-center text-xs text-[var(--color-text-muted)]">
-              Nao tem conta?{' '}
-              <Link
-                to="/register"
-                className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
-              >
-                Barbearia
-              </Link>
-              {' · '}
-              <Link
-                to={clientRegisterHref}
-                className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
-              >
-                Cliente
-              </Link>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-4">
+            <p className="text-sm font-semibold text-[var(--color-text)]">Buscar e agendar serviços</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">
+              Entre para explorar empresas locais ou acessar o painel da sua empresa.
             </p>
-          </section>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
-                {error}
-              </div>
-            )}
+          </div>
 
-            <FormField
-              label="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-            />
-
-            <FormField
-              label="Senha"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-
-            <PrimaryButton
-              type="submit"
-              disabled={loading}
-              loading={loading}
-            >
-              {loading ? 'Entrando...' : 'Entrar'}
-            </PrimaryButton>
-
-            <p className="text-center text-xs text-[var(--color-text-muted)]">
-              Nao tem conta?{' '}
-              {mode === 'shop' ? (
-                <Link
-                  to="/register"
-                  className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
-                >
-                  Criar conta
-                </Link>
-              ) : (
-                <Link
-                  to={clientRegisterHref}
-                  className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
-                >
-                  Criar conta
-                </Link>
-              )}
-            </p>
-
-            <div className="pt-1 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('select')
-                  setError('')
-                }}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
-              >
-                <ArrowLeft size={14} />
-                Voltar
-              </button>
+          {error && (
+            <div className="rounded-2xl border border-[#ff4d9d]/35 bg-[#ff4d9d]/10 px-3 py-2 text-sm text-red-100">
+              {error}
             </div>
-          </form>
-        )}
+          )}
+
+          <FormField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="email"
+            required
+          />
+
+          <FormField
+            label="Senha"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+            required
+          />
+
+          <PrimaryButton
+            type="submit"
+            disabled={loading}
+            loading={loading}
+          >
+            {loading ? 'Entrando...' : 'Entrar'}
+          </PrimaryButton>
+
+          <div className="grid gap-2 pt-1 sm:grid-cols-2">
+            <Link
+              to={clientRegisterHref}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-white/[0.055] px-3 py-3 text-sm font-semibold text-[var(--color-text)] transition-all hover:-translate-y-0.5 hover:border-[var(--color-border-strong)] hover:bg-white/[0.09]"
+            >
+              <Search size={15} />
+              Criar conta
+            </Link>
+            <Link
+              to="/register"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-white/[0.055] px-3 py-3 text-sm font-semibold text-[var(--color-text)] transition-all hover:-translate-y-0.5 hover:border-[var(--color-border-strong)] hover:bg-white/[0.09]"
+            >
+              <Building2 size={15} />
+              Cadastrar empresa
+            </Link>
+          </div>
+        </form>
       </AuthCard>
     </AuthLayout>
   )

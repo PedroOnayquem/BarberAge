@@ -68,7 +68,7 @@ export function OutlinedField({
   const Icon = resolveIcon(as, type, icon)
   const withIcon = Icon ? 'pr-10' : ''
   const baseField =
-    'outlined-field-control w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-input-bg)] text-sm text-[var(--color-text)] hover:bg-[var(--color-input-bg)] focus:bg-[var(--color-input-bg)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/25 disabled:cursor-not-allowed disabled:opacity-60'
+    'outlined-field-control w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] text-sm text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all duration-200 placeholder:text-[var(--color-text-muted)]/70 hover:border-[var(--color-border-strong)] hover:bg-white/[0.07] focus:bg-white/[0.075] focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/25 disabled:cursor-not-allowed disabled:opacity-60'
   const padding = as === 'textarea' ? 'px-3.5 pb-3 pt-5' : 'px-3.5 pb-2 pt-5'
   const selectFix = as === 'select' ? 'appearance-none' : ''
   const fieldClasses = `${baseField} ${padding} ${withIcon} ${selectFix} ${error ? 'border-red-500' : ''} ${className}`
@@ -137,7 +137,7 @@ export function OutlinedField({
         {label && (
           <label
             htmlFor={fieldId}
-            className="outlined-field-label pointer-events-none absolute left-3 top-0 -translate-y-1/2 px-1 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)] transition-colors duration-200"
+            className="outlined-field-label pointer-events-none absolute left-3 top-0 -translate-y-1/2 px-2 text-xs font-semibold text-[var(--color-text-muted)] transition-colors duration-200"
           >
             {label}
           </label>

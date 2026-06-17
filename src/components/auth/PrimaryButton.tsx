@@ -15,7 +15,7 @@ export function PrimaryButton({
   return (
     <button
       type="button"
-      className={`inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-3 text-sm font-bold uppercase tracking-[0.11em] text-white transition-colors duration-200 hover:bg-[var(--color-primary-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/35 focus:ring-offset-2 focus:ring-offset-[var(--color-bg-elevated)] disabled:cursor-not-allowed disabled:opacity-70 ${className}`}
+      className={`brand-gradient-bg inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-bold text-white shadow-[0_18px_42px_rgba(123,97,255,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_22px_52px_rgba(0,194,255,0.22)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/35 focus:ring-offset-2 focus:ring-offset-[var(--color-bg-elevated)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 ${className}`}
       disabled={disabled || loading}
       {...props}
     >

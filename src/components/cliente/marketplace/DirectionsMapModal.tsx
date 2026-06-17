@@ -697,7 +697,7 @@ export function DirectionsMapModal({
 
     if (!shopCoords) {
       setLocationStatus('unavailable')
-      setPermissionMessage('Localizacao ainda nao configurada para esta barbearia.')
+      setPermissionMessage('Localizacao ainda nao configurada para esta empresa.')
     } else if (isInAppBrowser) {
       setLocationStatus('in_app')
       setPermissionMessage('Para usar localizacao em tempo real, abra no Safari/Chrome (o navegador embutido bloqueia permissao).')
@@ -990,7 +990,7 @@ export function DirectionsMapModal({
             <X size={18} />
           </button>
 
-          <div className="pointer-events-auto max-w-[60vw] truncate rounded-full border border-white/20 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold tracking-[0.08em] text-slate-100 backdrop-blur sm:max-w-xs">
+          <div className="pointer-events-auto max-w-[60vw] truncate rounded-full border border-white/20 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-100 backdrop-blur sm:max-w-xs">
             {shopName}
           </div>
 
@@ -1030,7 +1030,7 @@ export function DirectionsMapModal({
                   <Polyline
                     positions={routePoints}
                     pathOptions={{
-                      color: '#2563eb',
+                      color: '#00c2ff',
                       weight: 6,
                       opacity: 0.95,
                     }}
@@ -1106,7 +1106,7 @@ export function DirectionsMapModal({
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold text-slate-50">Localização não configurada</h3>
                 <p className="text-sm text-slate-300">
-                  Esta barbearia ainda não possui latitude/longitude salvas. Não é possível desenhar rota no mapa interno.
+                  Esta empresa ainda não possui latitude/longitude salvas. Não é possível desenhar rota no mapa interno.
                 </p>
                 <p className="text-xs text-slate-300">Você pode abrir no Google Maps usando o endereço cadastrado.</p>
                 {import.meta.env.DEV && !!debugInfo && <p className="break-all text-[11px] text-slate-400">{debugInfo}</p>}
@@ -1132,7 +1132,7 @@ export function DirectionsMapModal({
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold text-slate-50">Permitir localizacao para rotas</h3>
                 <p className="text-sm text-slate-300">
-                  Precisamos da sua localizacao para tracar o caminho ate a barbearia.
+                  Precisamos da sua localizacao para tracar o caminho ate a empresa.
                 </p>
                 {permissionMessage && <p className="text-xs text-slate-300">{permissionMessage}</p>}
                 {showInAppWarning && (
@@ -1249,7 +1249,7 @@ export function DirectionsMapModal({
                     ? 'Nao foi possivel concluir em ate 12 segundos.'
                     : locationStatus === 'unavailable'
                     ? 'GPS indisponivel no momento. Verifique sinal/localizacao do aparelho.'
-                    : 'Ative a localizacao para ver a rota em tempo real ate a barbearia.'}
+                    : 'Ative a localizacao para ver a rota em tempo real ate a empresa.'}
                 </p>
                 {permissionMessage && <p className="text-xs text-slate-300">{permissionMessage}</p>}
                 {showInAppWarning && (
@@ -1320,17 +1320,17 @@ export function DirectionsMapModal({
               !showInAppBlocked &&
               !showInsecureContext && (
               <>
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-300">Rota</p>
+                <p className="text-xs font-semibold text-slate-300">Rota</p>
                 <h3 className="mt-1 text-lg font-bold text-slate-50">{shopName}</h3>
                 <p className="mt-1 text-sm text-slate-300">{shopAddress}</p>
 
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2">
-                    <p className="text-xs uppercase tracking-[0.08em] text-slate-300">Distancia</p>
+                    <p className="text-xs text-slate-300">Distancia</p>
                     <p className="text-sm font-semibold text-slate-50">{formatDistance(distanceMeters)}</p>
                   </div>
                   <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2">
-                    <p className="text-xs uppercase tracking-[0.08em] text-slate-300">Tempo estimado</p>
+                    <p className="text-xs text-slate-300">Tempo estimado</p>
                     <p className="text-sm font-semibold text-slate-50">{formatDuration(durationSeconds)}</p>
                   </div>
                 </div>
@@ -1391,7 +1391,7 @@ export function DirectionsMapModal({
                 {import.meta.env.DEV && (
                   <button
                     onClick={() => setDevSimulationEnabled((value) => !value)}
-                    className="mt-2 w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-200 transition-colors hover:bg-white/10"
+                    className="mt-2 w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/10"
                   >
                     {devSimulationEnabled ? 'Parar simulacao' : 'Simular deslocamento (dev)'}
                   </button>

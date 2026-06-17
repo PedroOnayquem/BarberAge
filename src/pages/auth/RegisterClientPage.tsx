@@ -70,7 +70,7 @@ export function RegisterClientPage() {
     })
 
     setLastAuthLoginMode('client')
-    redirectAfterAuth(nextPath || '/cliente/barbearias')
+    redirectAfterAuth(nextPath || '/cliente/empresas')
   }
 
   function handlePhoneChange(e: ChangeEvent<HTMLInputElement>) {
@@ -221,8 +221,8 @@ export function RegisterClientPage() {
     <AuthLayout>
       <AuthCard
         icon={step === 'success' ? <CheckCircle size={30} /> : <UserIcon size={30} />}
-        title="BARBERAGE"
-        subtitle={step === 'success' ? 'Verifique seu email' : 'Cadastro Cliente'}
+        title={step === 'success' ? 'Quase lá' : 'Criar conta'}
+        subtitle={step === 'success' ? 'Verifique seu email' : 'Busque empresas locais e agende serviços'}
       >
         {step === 'success' ? (
           <section className="space-y-6 text-center">
@@ -232,7 +232,7 @@ export function RegisterClientPage() {
             </p>
             <Link
               to={loginHref}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
             >
               <ArrowLeft size={14} />
               Voltar para o login
@@ -241,7 +241,7 @@ export function RegisterClientPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
+              <div className="rounded-2xl border border-[#ff4d9d]/35 bg-[#ff4d9d]/10 px-3 py-2 text-sm text-red-100">
                 {error}
               </div>
             )}
@@ -301,7 +301,7 @@ export function RegisterClientPage() {
               Ja tem conta?{' '}
               <Link
                 to={loginHref}
-                className="font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)] hover:text-[var(--color-text)]"
+                className="font-semibold text-[var(--color-accent)] hover:text-[var(--color-text)]"
               >
                 Entrar
               </Link>

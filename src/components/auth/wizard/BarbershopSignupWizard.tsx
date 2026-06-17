@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { CheckCircle2, Scissors } from 'lucide-react'
+import { Building2, CheckCircle2 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
 import { translateError } from '../../../lib/errorMessages'
@@ -35,7 +35,7 @@ interface AuthAccountStatus {
   emailConfirmed: boolean
 }
 
-type InsertMode = 'extended' | 'full' | 'legacy'
+type InsertMode = 'full' | 'legacy'
 type InsertRelation = 'barbershops' | 'shops'
 
 interface InsertAttempt {
@@ -53,14 +53,14 @@ interface InsertResult {
 const STEP_COPY: Record<WizardStep, { title: string; subtitle: string }> = {
   1: {
     title: 'Crie sua conta de acesso',
-    subtitle: 'Use email e senha para iniciar seu cadastro de barbearia.',
+    subtitle: 'Use email e senha para iniciar o cadastro da sua empresa.',
   },
   2: {
-    title: 'Que tipo de barbearia e a sua?',
-    subtitle: 'Selecione a opcao que melhor representa seu negocio.',
+    title: 'Quais categorias sua empresa atende?',
+    subtitle: 'Selecione uma ou mais categorias para aparecer nos filtros do marketplace.',
   },
   3: {
-    title: 'Onde fica sua barbearia?',
+    title: 'Onde fica sua empresa?',
     subtitle: 'Digite o CEP e complete as informacoes.',
   },
   4: {
@@ -68,7 +68,7 @@ const STEP_COPY: Record<WizardStep, { title: string; subtitle: string }> = {
     subtitle: 'Esses dados serao usados para contato e administracao.',
   },
   5: {
-    title: 'Como sua barbearia funciona?',
+    title: 'Como sua empresa funciona?',
     subtitle: 'Defina capacidade, intervalo e horario inicial.',
   },
   6: {
@@ -178,7 +178,7 @@ async function insertShopWithFallback(attempts: InsertAttempt[]): Promise<Insert
     }
   }
 
-  throw new Error(translateError(lastError?.message || 'Nao foi possivel criar a barbearia.'))
+  throw new Error(translateError(lastError?.message || 'Nao foi possivel criar a empresa.'))
 }
 
 async function updateAvatarInFallbackRelations(shopId: string, primaryRelation: InsertRelation, avatarPath: string) {
@@ -213,6 +213,53 @@ async function fetchReadBackShop(shopId: string, primaryRelation: InsertRelation
   }
 
   return null
+}
+
+async function loadSelectedCategories(categorySlugs: string[]) {
+  const normalizedSlugs = Array.from(new Set(categorySlugs.map((slug) => slug.trim()).filter(Boolean)))
+  if (normalizedSlugs.length === 0) {
+    throw new Error('Selecione pelo menos uma categoria.')
+  }
+
+  const { data: categories, error: categoriesError } = await supabase
+    .from('categories')
+    .select('id, slug')
+    .in('slug', normalizedSlugs)
+
+  if (categoriesError) {
+    if (isSchemaCompatibilityError(categoriesError.message || '')) {
+      throw new Error('As categorias ainda nao existem no banco. Aplique a migration de marketplace antes de finalizar o cadastro.')
+    }
+    throw new Error(translateError(categoriesError.message || 'Nao foi possivel carregar as categorias.'))
+  }
+
+  const categoryRows = categories || []
+  const foundSlugs = new Set(categoryRows.map((category) => category.slug))
+  const missingSlugs = normalizedSlugs.filter((slug) => !foundSlugs.has(slug))
+  if (missingSlugs.length > 0) {
+    throw new Error('Uma ou mais categorias selecionadas nao existem no banco de dados.')
+  }
+
+  return categoryRows
+}
+
+async function assignShopCategories(shopId: string, categoryRows: Array<{ id: string; slug: string }>) {
+  const { error: deleteError } = await supabase
+    .from('shop_categories')
+    .delete()
+    .eq('shop_id', shopId)
+
+  if (deleteError) {
+    throw new Error(translateError(deleteError.message || 'Nao foi possivel atualizar as categorias.'))
+  }
+
+  const { error: insertError } = await supabase
+    .from('shop_categories')
+    .insert(categoryRows.map((category) => ({ shop_id: shopId, category_id: category.id })))
+
+  if (insertError) {
+    throw new Error(translateError(insertError.message || 'Nao foi possivel salvar as categorias.'))
+  }
 }
 
 function buildInitialBusinessHours(shopId: string, data: WizardData) {
@@ -713,6 +760,14 @@ export function BarbershopSignupWizard() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  function handleCategoryToggle(categorySlug: WizardData['categorySlugs'][number]) {
+    const selected = state.data.categorySlugs.includes(categorySlug)
+    const nextCategories = selected
+      ? state.data.categorySlugs.filter((slug) => slug !== categorySlug)
+      : [...state.data.categorySlugs, categorySlug]
+    setField('categorySlugs', nextCategories)
+  }
+
   async function handleFinalize() {
     const validation = validateAllSteps(state.data, { skipAccountValidation })
     setErrors(validation.errors)
@@ -738,7 +793,7 @@ export function BarbershopSignupWizard() {
       const normalizedState = state.data.state.trim().toUpperCase()
       const normalizedComplement = state.data.complement.trim()
       const normalizedTimezone = state.data.timezone.trim() || 'America/Fortaleza'
-      const parsedProfessionalsCount = Number.parseInt(state.data.professionalsCount, 10)
+      const normalizedCategorySlugs = Array.from(new Set(state.data.categorySlugs))
       const parsedSlotInterval = Number.parseInt(state.data.slotIntervalMinutes, 10)
       const parsedBuffer = Number.parseInt(state.data.bufferMinutes, 10)
       const slug = `${generateSlug(normalizedShopName)}-${Date.now().toString(36)}`
@@ -784,13 +839,6 @@ export function BarbershopSignupWizard() {
         buffer_minutes: parsedBuffer,
       })
 
-      const extendedPayload = sanitizePayload({
-        ...fullPayload,
-        shop_type: state.data.businessType,
-        owner_name: normalizedOwnerName || null,
-        professionals_count: Number.isFinite(parsedProfessionalsCount) ? parsedProfessionalsCount : null,
-      })
-
       const legacyPayload = sanitizePayload({
         name: normalizedShopName,
         slug,
@@ -801,20 +849,19 @@ export function BarbershopSignupWizard() {
         state: normalizedState || null,
         timezone: normalizedTimezone,
       })
+      const selectedCategoryRows = await loadSelectedCategories(normalizedCategorySlugs)
 
       const attempts: InsertAttempt[] = [
-        { relation: 'barbershops', mode: 'extended', payload: extendedPayload },
-        { relation: 'barbershops', mode: 'full', payload: fullPayload },
-        { relation: 'barbershops', mode: 'legacy', payload: legacyPayload },
-        { relation: 'shops', mode: 'extended', payload: extendedPayload },
         { relation: 'shops', mode: 'full', payload: fullPayload },
         { relation: 'shops', mode: 'legacy', payload: legacyPayload },
+        { relation: 'barbershops', mode: 'full', payload: fullPayload },
+        { relation: 'barbershops', mode: 'legacy', payload: legacyPayload },
       ]
 
       const insertResult = await insertShopWithFallback(attempts)
       const shopId = String(insertResult.row.id || '')
       if (!shopId) {
-        throw new Error('Nao foi possivel obter o ID da barbearia criada.')
+        throw new Error('Nao foi possivel obter o ID da empresa criada.')
       }
 
       const { error: memberError } = await supabase
@@ -823,6 +870,8 @@ export function BarbershopSignupWizard() {
       if (memberError) {
         throw new Error(translateError(memberError.message || 'Falha ao vincular usuario como admin.'))
       }
+
+      await assignShopCategories(shopId, selectedCategoryRows)
 
       const hoursPayload = buildInitialBusinessHours(shopId, state.data)
       const { error: businessHoursError } = await supabase
@@ -841,7 +890,7 @@ export function BarbershopSignupWizard() {
           await updateAvatarInFallbackRelations(shopId, insertResult.relation, avatarPath)
         } catch (avatarError) {
           const avatarMessage =
-            avatarError instanceof Error ? avatarError.message : 'Falha ao enviar logo da barbearia.'
+            avatarError instanceof Error ? avatarError.message : 'Falha ao enviar logo da empresa.'
           setSubmitWarning(avatarMessage)
         }
       }
@@ -870,7 +919,7 @@ export function BarbershopSignupWizard() {
       setFinishSuccess(true)
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Nao foi possivel finalizar o cadastro da barbearia.'
+        error instanceof Error ? error.message : 'Nao foi possivel finalizar o cadastro da empresa.'
       setSubmitError(translateError(message))
     } finally {
       setSubmitLoading(false)
@@ -914,9 +963,9 @@ export function BarbershopSignupWizard() {
     if (state.step === 2) {
       return (
         <Step1BusinessType
-          value={state.data.businessType}
-          error={state.errors.businessType}
-          onSelect={(value) => setField('businessType', value)}
+          value={state.data.categorySlugs}
+          error={state.errors.categorySlugs}
+          onToggle={handleCategoryToggle}
         />
       )
     }
@@ -964,8 +1013,8 @@ export function BarbershopSignupWizard() {
   if (!draftReady) {
     return (
       <div className="signup-wizard-bg flex min-h-[100dvh] items-center justify-center px-4 py-8">
-        <div className="signup-wizard-card signup-wizard-scope w-full max-w-[720px] rounded-[20px] p-8 text-center">
-          <p className="text-sm text-[#cbd5e1]">Preparando cadastro...</p>
+        <div className="signup-wizard-card signup-wizard-scope w-full max-w-[720px] rounded-[28px] border border-[var(--color-border)] p-8 text-center shadow-[var(--shadow-card)]">
+          <p className="text-sm text-[var(--color-text-muted)]">Preparando cadastro...</p>
         </div>
       </div>
     )
@@ -974,8 +1023,8 @@ export function BarbershopSignupWizard() {
   if (forceNewAccountIntent && !newIntentSessionChecked) {
     return (
       <div className="signup-wizard-bg flex min-h-[100dvh] items-center justify-center px-4 py-8">
-        <div className="signup-wizard-card signup-wizard-scope w-full max-w-[720px] rounded-[20px] p-8 text-center">
-          <p className="text-sm text-[#cbd5e1]">Preparando cadastro...</p>
+        <div className="signup-wizard-card signup-wizard-scope w-full max-w-[720px] rounded-[28px] border border-[var(--color-border)] p-8 text-center shadow-[var(--shadow-card)]">
+          <p className="text-sm text-[var(--color-text-muted)]">Preparando cadastro...</p>
         </div>
       </div>
     )
@@ -984,13 +1033,13 @@ export function BarbershopSignupWizard() {
   if (finishSuccess) {
     return (
       <div className="signup-wizard-bg flex min-h-[100dvh] items-center justify-center px-4 py-8">
-        <div className="signup-wizard-card signup-wizard-scope w-full max-w-[720px] rounded-[20px] p-6 text-center sm:p-10">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-[rgba(74,222,128,0.4)] bg-[rgba(22,101,52,0.35)] text-[#bbf7d0]">
+        <div className="signup-wizard-card signup-wizard-scope w-full max-w-[720px] rounded-[28px] border border-[var(--color-border)] p-6 text-center shadow-[var(--shadow-card)] sm:p-10">
+          <div className="brand-gradient-bg mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-[0_18px_42px_rgba(123,97,255,0.28)]">
             <CheckCircle2 size={28} />
           </div>
-          <h1 className="text-2xl font-bold text-[#f8fafc]">Cadastro concluido com sucesso</h1>
-          <p className="mt-2 text-sm text-[#94a3b8]">
-            Sua barbearia foi criada. Agora voce pode gerenciar agenda, servicos e equipe.
+          <h1 className="text-2xl font-bold text-[var(--color-text)]">Cadastro concluido com sucesso</h1>
+          <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+            Sua empresa foi criada. Agora voce pode gerenciar agenda, servicos e equipe.
           </p>
 
           {submitWarning && (
@@ -1004,7 +1053,7 @@ export function BarbershopSignupWizard() {
               type="button"
               onClick={() => void handleGoToDashboard()}
               disabled={navigatingAfterSuccess}
-              className="w-full rounded-xl bg-[var(--color-accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              className="brand-gradient-bg w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {navigatingAfterSuccess ? 'Redirecionando...' : 'Ir para o dashboard'}
             </button>
@@ -1016,8 +1065,8 @@ export function BarbershopSignupWizard() {
 
   return (
     <div className="signup-wizard-bg min-h-[100dvh] px-4 pb-24 pt-5 sm:px-6 sm:py-10">
-      <main className="signup-wizard-card signup-wizard-scope mx-auto w-full max-w-[720px] rounded-[20px] border border-[rgba(255,255,255,0.06)] shadow-[0_28px_68px_rgba(2,6,23,0.52)]">
-        <header className="signup-wizard-header sticky top-0 z-20 rounded-t-[20px] border-b border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.95)] px-4 pb-4 pt-4 backdrop-blur md:px-8">
+      <main className="signup-wizard-card signup-wizard-scope mx-auto w-full max-w-[720px] rounded-[28px] border border-[var(--color-border)] shadow-[var(--shadow-card)]">
+        <header className="signup-wizard-header sticky top-0 z-20 rounded-t-[28px] border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]/95 px-4 pb-4 pt-4 backdrop-blur-xl md:px-8">
           <div className="wizard-progress-track">
             <div className="wizard-progress-fill" style={{ width: `${progress}%` }} />
           </div>
@@ -1036,16 +1085,16 @@ export function BarbershopSignupWizard() {
           </div>
 
           <div className="mt-4 text-center">
-            <div className="mx-auto mb-3 flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(59,130,246,0.42)] bg-[rgba(37,99,235,0.2)] text-[#bfdbfe]">
-              <Scissors size={16} />
+            <div className="brand-gradient-bg mx-auto mb-3 flex h-9 w-9 items-center justify-center rounded-2xl text-white shadow-[0_12px_28px_rgba(123,97,255,0.25)]">
+              <Building2 size={16} />
             </div>
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#94a3b8]">
+            <p className="text-xs font-medium text-[var(--color-text-muted)]">
               Passo {state.step} de {TOTAL_WIZARD_STEPS}
             </p>
-            <h1 className="mt-2 text-[26px] font-bold leading-tight text-[#f8fafc] sm:text-[30px]">
+            <h1 className="mt-2 text-[26px] font-bold leading-tight text-[var(--color-text)] sm:text-[30px]">
               {currentStepInfo.title}
             </h1>
-            <p className="mx-auto mt-2 max-w-[56ch] text-sm text-[#94a3b8]">{currentStepInfo.subtitle}</p>
+            <p className="mx-auto mt-2 max-w-[56ch] text-sm text-[var(--color-text-muted)]">{currentStepInfo.subtitle}</p>
           </div>
         </header>
 
@@ -1069,7 +1118,7 @@ export function BarbershopSignupWizard() {
               type="button"
               onClick={handleBack}
               disabled={state.step === 1 || loadingAction}
-              className="rounded-xl border border-[rgba(148,163,184,0.3)] bg-[rgba(15,23,42,0.7)] px-4 py-2.5 text-sm font-semibold text-[#cbd5e1] transition hover:bg-[rgba(30,41,59,0.88)] disabled:cursor-not-allowed disabled:opacity-55"
+              className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] transition hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-55"
             >
               Voltar
             </button>
@@ -1077,7 +1126,7 @@ export function BarbershopSignupWizard() {
               type="button"
               onClick={handleContinue}
               disabled={!canAdvance || loadingAction}
-              className="rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-55"
+              className="brand-gradient-bg rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55"
             >
               {submitLoading
                 ? 'Salvando...'
@@ -1097,7 +1146,7 @@ export function BarbershopSignupWizard() {
             type="button"
             onClick={handleBack}
             disabled={state.step === 1 || loadingAction}
-            className="min-h-[52px] rounded-[14px] border border-[rgba(148,163,184,0.32)] bg-[rgba(15,23,42,0.92)] px-4 text-sm font-semibold text-[#cbd5e1] disabled:cursor-not-allowed disabled:opacity-55"
+            className="min-h-[52px] rounded-2xl border border-[var(--color-border)] bg-white/[0.055] px-4 text-sm font-semibold text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-55"
           >
             Voltar
           </button>
@@ -1105,7 +1154,7 @@ export function BarbershopSignupWizard() {
             type="button"
             onClick={handleContinue}
             disabled={!canAdvance || loadingAction}
-            className="min-h-[52px] flex-1 rounded-[14px] bg-[var(--color-primary)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55"
+            className="brand-gradient-bg min-h-[52px] flex-1 rounded-2xl px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55"
           >
             {submitLoading
               ? 'Salvando...'

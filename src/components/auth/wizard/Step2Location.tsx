@@ -447,7 +447,7 @@ export function Step2Location({ data, errors, onFieldChange }: Step2LocationProp
         )}
       </section>
 
-      <Modal open={mapModalOpen} onClose={() => setMapModalOpen(false)} title="Confirmar localizacao da barbearia" size="lg">
+      <Modal open={mapModalOpen} onClose={() => setMapModalOpen(false)} title="Confirmar localizacao da empresa" size="lg">
         <div className="space-y-3">
           <p className="text-sm text-[var(--color-text-muted)]">Arraste o pin para ajustar a localizacao com precisao.</p>
 

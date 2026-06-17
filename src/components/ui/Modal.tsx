@@ -31,13 +31,13 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-      <div className="fixed inset-0 bg-[#08152f]/55 dark:bg-black/60" onClick={onClose} />
-      <div className={`relative w-full ${sizeClasses[size]} max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_20px_55px_rgba(10,31,68,0.2)] sm:max-h-[90vh] sm:p-6`}>
+      <div className="fixed inset-0 bg-black/68 backdrop-blur-sm" onClick={onClose} />
+      <div className={`relative w-full ${sizeClasses[size]} max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-card)] sm:max-h-[90vh] sm:p-6`}>
         <div className="mb-4 flex items-center justify-between gap-3 border-b border-[var(--color-border)] pb-3">
           <h2 className="text-lg font-bold text-[var(--color-text)]">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-xl p-1 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
+            className="rounded-2xl p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-white/[0.08] hover:text-[var(--color-text)]"
             aria-label="Fechar"
           >
             <X size={20} />

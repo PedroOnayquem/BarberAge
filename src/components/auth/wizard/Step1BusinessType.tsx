@@ -1,56 +1,64 @@
-import { Building2, Crown, Scissors, Sparkles, Store } from 'lucide-react'
+import { Car, Check, Hand, HeartPulse, PawPrint, Scissors, Sparkles } from 'lucide-react'
 import {
   BUSINESS_TYPE_OPTIONS,
-  type BusinessType,
+  type BusinessCategory,
   type BusinessTypeOption,
 } from './useWizardState'
 
 interface Step1BusinessTypeProps {
-  value: BusinessType
+  value: BusinessCategory[]
   error?: string
-  onSelect: (value: Exclude<BusinessType, null>) => void
+  onToggle: (value: BusinessCategory) => void
 }
 
 function resolveIcon(option: BusinessTypeOption) {
-  if (option.value === 'traditional') return Store
-  if (option.value === 'modern') return Sparkles
-  if (option.value === 'studio') return Scissors
-  if (option.value === 'premium') return Crown
-  return Building2
+  if (option.value === 'barbershop') return Scissors
+  if (option.value === 'manicure') return Hand
+  if (option.value === 'car_wash') return Car
+  if (option.value === 'aesthetics') return Sparkles
+  if (option.value === 'massage') return HeartPulse
+  return PawPrint
 }
 
-export function Step1BusinessType({ value, error, onSelect }: Step1BusinessTypeProps) {
+export function Step1BusinessType({ value, error, onToggle }: Step1BusinessTypeProps) {
   return (
     <div className="space-y-4">
+      <p className="text-sm text-[var(--color-text-muted)]">
+        Escolha uma ou mais categorias para sua empresa aparecer nos filtros do marketplace.
+      </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {BUSINESS_TYPE_OPTIONS.map((option) => {
           const Icon = resolveIcon(option)
-          const isSelected = value === option.value
+          const isSelected = value.includes(option.value)
 
           return (
             <button
               key={option.value}
               type="button"
-              onClick={() => onSelect(option.value)}
+              onClick={() => onToggle(option.value)}
+              aria-pressed={isSelected}
               className={`group rounded-2xl border p-4 text-left transition-all ${
                 isSelected
-                  ? 'border-[#ef4444] bg-[color-mix(in_srgb,#ef4444_14%,#0f172a)] shadow-[0_0_0_1px_rgba(239,68,68,0.2),0_12px_28px_rgba(239,68,68,0.14)]'
-                  : 'border-[rgba(148,163,184,0.24)] bg-[rgba(15,23,42,0.84)] hover:border-[rgba(59,130,246,0.6)] hover:bg-[rgba(30,41,59,0.9)]'
+                  ? 'brand-gradient-soft border-[var(--color-accent)]/45 shadow-[0_14px_34px_rgba(123,97,255,0.18)]'
+                  : 'border-[var(--color-border)] bg-white/[0.055] hover:border-[var(--color-border-strong)] hover:bg-white/[0.08]'
               }`}
             >
               <div className="flex items-start gap-3">
                 <span
                   className={`mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
                     isSelected
-                      ? 'border-[rgba(239,68,68,0.55)] bg-[rgba(239,68,68,0.16)] text-[#fecaca]'
-                      : 'border-[rgba(148,163,184,0.34)] bg-[rgba(15,23,42,0.88)] text-[#93c5fd] group-hover:border-[rgba(59,130,246,0.55)]'
+                      ? 'border-white/20 bg-white/14 text-white'
+                      : 'border-white/10 bg-white/[0.06] text-[var(--color-accent)] group-hover:border-[var(--color-accent)]/40'
                   }`}
                 >
                   <Icon size={18} />
                 </span>
                 <div className="min-w-0 space-y-1">
-                  <p className="text-sm font-semibold text-[#f8fafc]">{option.title}</p>
-                  <p className="text-xs leading-5 text-[#94a3b8]">{option.description}</p>
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
+                    {option.title}
+                    {isSelected && <Check size={15} className="text-[var(--color-accent)]" />}
+                  </p>
+                  <p className="text-xs leading-5 text-[var(--color-text-muted)]">{option.description}</p>
                 </div>
               </div>
             </button>
@@ -59,7 +67,7 @@ export function Step1BusinessType({ value, error, onSelect }: Step1BusinessTypeP
       </div>
 
       {error && (
-        <p className="rounded-xl border border-[rgba(248,113,113,0.3)] bg-[rgba(127,29,29,0.35)] px-3 py-2 text-xs text-[#fecaca]">
+        <p className="rounded-2xl border border-[#ff4d9d]/35 bg-[#ff4d9d]/10 px-3 py-2 text-xs text-red-100">
           {error}
         </p>
       )}

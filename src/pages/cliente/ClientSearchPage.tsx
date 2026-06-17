@@ -1,34 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BadgePercent, Brush, Gem, Scissors, Search, Sparkles } from 'lucide-react'
+import { Car, Hand, HeartPulse, PawPrint, Scissors, Search, Sparkles } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getSignedAvatarUrl, SHOP_AVATARS_BUCKET } from '../../lib/avatarStorage'
+import {
+  ALL_CATEGORIES_FILTER,
+  DEFAULT_SERVICE_CATEGORIES,
+  type MarketplaceCategoryFilter,
+  type ServiceCategorySlug,
+} from '../../lib/serviceCategories'
 import type { Database } from '../../types/database'
 
 type SearchShopRow =
+  Database['public']['Functions']['list_public_service_businesses_with_status_filtered']['Returns'][number]
+type LegacySearchShopRow =
   Database['public']['Functions']['list_public_barbershops_with_status_filtered']['Returns'][number]
 
 interface SearchShop extends SearchShopRow {
   avatarSignedUrl: string | null
-  serviceNames: string[]
 }
 
-type CategoryId = 'all' | 'corte' | 'barba' | 'degrade' | 'sobrancelha' | 'pacote'
-
-const CATEGORIES: Array<{
-  id: CategoryId
-  label: string
-  icon: typeof Scissors
-  keywords: string[]
-  bg: string
-}> = [
-  { id: 'all', label: 'Todos', icon: Sparkles, keywords: [], bg: 'bg-[var(--color-accent-soft)]' },
-  { id: 'corte', label: 'Corte', icon: Scissors, keywords: ['corte'], bg: 'bg-[var(--color-primary-soft)]' },
-  { id: 'barba', label: 'Barba', icon: Brush, keywords: ['barba'], bg: 'bg-[var(--color-accent-soft)]' },
-  { id: 'degrade', label: 'Degradê', icon: Gem, keywords: ['degrade', 'degradê'], bg: 'bg-[var(--color-primary-soft)]' },
-  { id: 'sobrancelha', label: 'Sobrancelha', icon: Sparkles, keywords: ['sobrancelha'], bg: 'bg-[var(--color-accent-soft)]' },
-  { id: 'pacote', label: 'Pacote', icon: BadgePercent, keywords: ['pacote', 'combo'], bg: 'bg-[var(--color-primary-soft)]' },
-]
+const CATEGORY_ICON_MAP: Record<ServiceCategorySlug, typeof Sparkles> = {
+  barbershop: Scissors,
+  manicure: Hand,
+  car_wash: Car,
+  aesthetics: Sparkles,
+  massage: HeartPulse,
+  pet_care: PawPrint,
+}
 
 function normalize(value: string | null | undefined) {
   return (value || '').trim().toLowerCase()
@@ -40,9 +39,18 @@ function formatLocation(shop: Pick<SearchShop, 'address' | 'city' | 'state'>) {
   return segments.join(' · ') || 'Endereço não informado'
 }
 
+function normalizeLegacyRow(shop: LegacySearchShopRow): SearchShopRow {
+  return {
+    ...shop,
+    category_slugs: ['barbershop'],
+    category_names: ['Barbearia'],
+    service_names: [],
+  }
+}
+
 export function ClientSearchPage() {
   const [query, setQuery] = useState('')
-  const [activeCategory, setActiveCategory] = useState<CategoryId>('all')
+  const [activeCategory, setActiveCategory] = useState<MarketplaceCategoryFilter>(ALL_CATEGORIES_FILTER)
   const [shops, setShops] = useState<SearchShop[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -51,13 +59,13 @@ export function ClientSearchPage() {
     setLoading(true)
     setError('')
 
-    const [shopsRes, servicesRes] = await Promise.all([
-      supabase.rpc('list_public_barbershops_with_status_filtered', { p_city: null, p_state: null }),
-      supabase.from('services').select('shop_id, name').eq('active', true),
-    ])
+    const { data: shopRows, error: shopsError } = await supabase.rpc(
+      'list_public_service_businesses_with_status_filtered',
+      { p_search: null, p_category_slug: null, p_city: null, p_state: null }
+    )
 
-    let shopRows = (shopsRes.data || []) as SearchShopRow[]
-    if (shopsRes.error) {
+    let rows = (shopRows || []) as SearchShopRow[]
+    if (shopsError) {
       const { data: baseRows, error: baseError } = await supabase.rpc('list_public_barbershops_with_status')
       if (baseError || !baseRows) {
         setShops([])
@@ -65,22 +73,14 @@ export function ClientSearchPage() {
         setLoading(false)
         return
       }
-      shopRows = baseRows as SearchShopRow[]
+      rows = (baseRows as LegacySearchShopRow[]).map(normalizeLegacyRow)
     }
 
-    const serviceNamesByShop = new Map<string, string[]>()
-    ;(servicesRes.data || []).forEach((service) => {
-      const list = serviceNamesByShop.get(service.shop_id) || []
-      list.push(service.name)
-      serviceNamesByShop.set(service.shop_id, list)
-    })
-
-    const deduped = Array.from(new Map(shopRows.map((shop) => [shop.id, shop])).values())
+    const deduped = Array.from(new Map(rows.map((shop) => [shop.id, shop])).values())
     const mapped = await Promise.all(
       deduped.map(async (shop) => ({
         ...shop,
         avatarSignedUrl: await getSignedAvatarUrl(SHOP_AVATARS_BUCKET, shop.avatar_url),
-        serviceNames: serviceNamesByShop.get(shop.id) || [],
       }))
     )
 
@@ -92,28 +92,44 @@ export function ClientSearchPage() {
     void loadData()
   }, [])
 
+  const categoryCards = useMemo(() => {
+    const counts = new Map<string, number>()
+    shops.forEach((shop) => {
+      shop.category_slugs.forEach((slug) => {
+        counts.set(slug, (counts.get(slug) || 0) + 1)
+      })
+    })
+
+    return [
+      { id: ALL_CATEGORIES_FILTER, label: 'Todos', icon: Sparkles, count: shops.length },
+      ...DEFAULT_SERVICE_CATEGORIES.map((category) => ({
+        id: category.slug,
+        label: category.name,
+        icon: CATEGORY_ICON_MAP[category.slug],
+        count: counts.get(category.slug) || 0,
+      })),
+    ]
+  }, [shops])
+
   const filteredShops = useMemo(() => {
     const q = normalize(query)
-    const category = CATEGORIES.find((item) => item.id === activeCategory)
 
     return shops.filter((shop) => {
       const searchable = [
         shop.name,
         shop.address || '',
+        shop.neighborhood || '',
         shop.city || '',
         shop.state || '',
-        ...shop.serviceNames,
+        ...shop.category_names,
+        ...shop.service_names,
       ]
         .join(' ')
         .toLowerCase()
 
       const matchesQuery = !q || searchable.includes(q)
       const matchesCategory =
-        !category ||
-        category.id === 'all' ||
-        category.keywords.some((keyword) =>
-          shop.serviceNames.some((serviceName) => normalize(serviceName).includes(keyword))
-        )
+        activeCategory === ALL_CATEGORIES_FILTER || shop.category_slugs.includes(activeCategory)
 
       return matchesQuery && matchesCategory
     })
@@ -121,9 +137,9 @@ export function ClientSearchPage() {
 
   return (
     <div className="space-y-5 px-4 py-4 sm:px-5 md:px-0 md:py-0">
-      <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 shadow-[var(--shadow-card)]">
-        <label htmlFor="client-search-input" className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
-          Buscar barbearia ou serviço
+      <section className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-4 shadow-[var(--shadow-card)]">
+        <label htmlFor="client-search-input" className="mb-2 block text-xs font-semibold text-[var(--color-text-muted)]">
+          Buscar empresa, serviço ou cidade
         </label>
         <div className="relative">
           <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
@@ -131,32 +147,35 @@ export function ClientSearchPage() {
             id="client-search-input"
             autoFocus
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ex: corte degradê, barba..."
-            className="w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-input-bg)] py-3 pl-10 pr-3 text-sm text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/25"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Ex: manicure, lavagem, centro..."
+            className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] py-3 pl-10 pr-3 text-sm text-[var(--color-text)] outline-none transition-all focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/25"
           />
         </div>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Categorias</h2>
+        <h2 className="text-sm font-bold text-[var(--color-text)]">Categorias</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-          {CATEGORIES.map((category) => {
+          {categoryCards.map((category) => {
             const Icon = category.icon
             const active = activeCategory === category.id
             return (
               <button
                 key={category.id}
                 type="button"
-                onClick={() => setActiveCategory(category.id)}
-                className={`rounded-2xl border p-3 text-left shadow-[var(--shadow-card)] transition-colors ${
+                onClick={() => setActiveCategory(category.id as MarketplaceCategoryFilter)}
+                className={`min-h-[112px] rounded-2xl border p-3 text-left shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 ${
                   active
-                    ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)]'
-                    : `border-[var(--color-border)] ${category.bg}`
+                    ? 'brand-gradient-bg border-white/20 text-white'
+                    : 'border-[var(--color-border)] bg-white/[0.055] hover:border-[var(--color-border-strong)] hover:bg-white/[0.08]'
                 }`}
               >
-                <Icon size={20} className={active ? 'text-[var(--color-primary)]' : 'text-[var(--color-text)]'} />
+                <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border ${active ? 'border-white/20 bg-white/18 text-white' : 'border-white/10 bg-white/[0.06] text-[var(--color-accent)]'}`}>
+                  <Icon size={19} />
+                </span>
                 <p className="mt-2 text-sm font-semibold text-[var(--color-text)]">{category.label}</p>
+                <p className={`mt-0.5 text-xs ${active ? 'text-white/78' : 'text-[var(--color-text-muted)]'}`}>{category.count} empresas</p>
               </button>
             )
           })}
@@ -165,26 +184,26 @@ export function ClientSearchPage() {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Resultados</h2>
+          <h2 className="text-sm font-bold text-[var(--color-text)]">Resultados</h2>
           <span className="text-xs text-[var(--color-text-muted)]">{filteredShops.length} itens</span>
         </div>
 
         {loading && (
           <div className="space-y-3">
-            <div className="h-24 animate-pulse rounded-2xl bg-[var(--color-surface-muted)]" />
-            <div className="h-24 animate-pulse rounded-2xl bg-[var(--color-surface-muted)]" />
+            <div className="h-24 animate-pulse rounded-2xl bg-white/[0.07]" />
+            <div className="h-24 animate-pulse rounded-2xl bg-white/[0.07]" />
           </div>
         )}
 
         {!loading && error && (
-          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-xs text-[var(--color-text-muted)]">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] px-3 py-2 text-xs text-[var(--color-text-muted)]">
             {error}
           </div>
         )}
 
         {!loading && !error && filteredShops.length === 0 && (
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-6 text-center text-sm text-[var(--color-text-muted)]">
-            Nenhuma barbearia encontrada com esse filtro.
+          <div className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-6 text-center text-sm text-[var(--color-text-muted)]">
+            Nenhuma empresa encontrada com esse filtro.
           </div>
         )}
 
@@ -192,27 +211,32 @@ export function ClientSearchPage() {
           filteredShops.map((shop) => (
             <Link
               key={shop.id}
-              to={`/cliente/barbearias/${shop.slug}`}
-              className="block rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-3 shadow-[var(--shadow-card)]"
+              to={`/cliente/empresas/${shop.slug}`}
+              className="block rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-3 shadow-[var(--shadow-card)] transition-all hover:border-[var(--color-border-strong)] hover:bg-white/[0.08]"
             >
               <div className="flex items-center gap-3">
                 {shop.avatarSignedUrl ? (
                   <img
                     src={shop.avatarSignedUrl}
                     alt={`Logo da ${shop.name}`}
-                    className="h-12 w-12 rounded-xl object-cover"
+                    className="h-12 w-12 rounded-2xl object-cover"
                   />
                 ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-surface-muted)] text-sm font-bold text-[var(--color-text)]">
+                  <div className="brand-gradient-soft flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 text-sm font-bold text-[var(--color-text)]">
                     {shop.name.charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-[var(--color-text)]">{shop.name}</p>
                   <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{formatLocation(shop)}</p>
+                  {shop.category_names.length > 0 && (
+                    <p className="mt-1 truncate text-xs font-medium text-[var(--color-accent)]">
+                      {shop.category_names.join(' · ')}
+                    </p>
+                  )}
                 </div>
                 {shop.can_book && (
-                  <span className="rounded-full bg-[var(--color-primary-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">
+                  <span className="rounded-full border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--color-accent)]">
                     Disponível
                   </span>
                 )}

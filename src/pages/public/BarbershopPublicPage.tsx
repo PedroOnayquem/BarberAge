@@ -251,7 +251,7 @@ export function BarbershopPublicPage() {
     setBookingLoading(true)
     setBookingError('')
 
-    // Verifica vínculo do usuário com a barbearia; se não existir, cria automaticamente.
+    // Verifica vínculo do usuário com a empresa; se não existir, cria automaticamente.
     const { data: linkedClient } = await supabase
       .from('client_users')
       .select('client_id')
@@ -323,7 +323,7 @@ export function BarbershopPublicPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)]">
+      <div className="app-shell flex min-h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
       </div>
     )
@@ -331,11 +331,11 @@ export function BarbershopPublicPage() {
 
   if (!shop) {
     return (
-      <div className="min-h-screen bg-[var(--color-bg)] px-4 py-10">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-8 text-center">
-          <h1 className="text-xl font-bold text-[var(--color-text)]">Barbearia não encontrada</h1>
+      <div className="app-shell min-h-screen px-4 py-10">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-8 text-center shadow-[var(--shadow-card)]">
+          <h1 className="text-xl font-bold text-[var(--color-text)]">Empresa não encontrada</h1>
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">Verifique o link e tente novamente.</p>
-          <Link to="/barbearias" className="mt-5 inline-flex text-sm font-medium text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]">
+          <Link to="/empresas" className="mt-5 inline-flex text-sm font-medium text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]">
             Voltar para listagem
           </Link>
         </div>
@@ -344,19 +344,19 @@ export function BarbershopPublicPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)]">
+    <div className="app-shell min-h-screen">
       <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
-        <Link to="/barbearias" className="mb-5 inline-flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+        <Link to="/empresas" className="mb-5 inline-flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
           <ChevronLeft size={16} />
-          Voltar para barbearias
+          Voltar para empresas
         </Link>
 
-        <div className="mb-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-5">
+        <div className="mb-6 rounded-[28px] border border-[var(--color-border)] bg-white/[0.055] p-5 shadow-[var(--shadow-card)]">
           <div className="flex flex-wrap items-center gap-4">
             {avatarUrl ? (
-              <img src={avatarUrl} alt={`Logo de ${shop.name}`} className="h-16 w-16 rounded-xl object-cover" />
+              <img src={avatarUrl} alt={`Logo de ${shop.name}`} className="h-16 w-16 rounded-2xl object-cover" />
             ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-[var(--color-surface-muted)] text-xl font-bold text-[var(--color-text)]">
+              <div className="brand-gradient-soft flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 text-xl font-bold text-[var(--color-text)]">
                 {shop.name.charAt(0).toUpperCase()}
               </div>
             )}
@@ -381,7 +381,7 @@ export function BarbershopPublicPage() {
                   className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
                     selectedService?.id === service.id
                       ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                      : 'border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                      : 'border-[var(--color-border)] bg-white/[0.045] text-[var(--color-text)] hover:bg-white/[0.08]'
                   }`}
                 >
                   <p className="font-medium">{service.name}</p>
@@ -401,7 +401,7 @@ export function BarbershopPublicPage() {
                   className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
                     selectedProfessional?.id === professional.id
                       ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                      : 'border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                      : 'border-[var(--color-border)] bg-white/[0.045] text-[var(--color-text)] hover:bg-white/[0.08]'
                   }`}
                 >
                   <p className="inline-flex items-center gap-1.5 font-medium">
@@ -464,8 +464,8 @@ export function BarbershopPublicPage() {
                       onClick={() => setSelectedSlot(slot)}
                       className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
                         selected
-                          ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-text)]'
-                          : 'border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                          ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                          : 'border-[var(--color-border)] text-[var(--color-text)] hover:bg-white/[0.08]'
                       }`}
                     >
                       {formatTimeInTimeZone(slot.slot_start, shop?.timezone || 'America/Sao_Paulo')}
@@ -485,27 +485,27 @@ export function BarbershopPublicPage() {
 
           {!user && (
             <p className="mb-3 text-sm text-[var(--color-text-muted)]">
-              Para concluir o agendamento, crie sua conta de cliente nesta barbearia.
+              Para concluir o agendamento, crie sua conta de cliente nesta empresa.
             </p>
           )}
 
           {!!user && !bookingSuccess && (
             <div className="mb-3 grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Nome</label>
+                <label className="text-xs font-medium text-[var(--color-text-muted)]">Nome</label>
                 <input
                   value={profileName}
                   onChange={(e) => setProfileName(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-input-bg)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+                  className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
                   placeholder="Seu nome (se for primeiro agendamento)"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Telefone</label>
+                <label className="text-xs font-medium text-[var(--color-text-muted)]">Telefone</label>
                 <input
                   value={profilePhone}
                   onChange={handleProfilePhoneChange}
-                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-input-bg)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+                  className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
                   placeholder="Opcional"
                   inputMode="numeric"
                   autoComplete="tel"
@@ -521,7 +521,7 @@ export function BarbershopPublicPage() {
           <button
             disabled={!selectedService || !selectedProfessional || !selectedSlot || bookingLoading || bookingSuccess}
             onClick={handleBook}
-            className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-accent)] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="brand-gradient-bg inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {bookingLoading ? 'Agendando...' : user ? 'Agendar' : 'Criar conta e agendar'}
           </button>

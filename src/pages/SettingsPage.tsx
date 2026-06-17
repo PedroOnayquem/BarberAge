@@ -27,6 +27,7 @@ import {
 } from '../lib/location'
 import { caretIndexFromDigitCount, countDigitsBeforeCaret, formatPhone, normalizePhone } from '../lib/phone'
 import { formatShortDateTimeInTimeZone, zonedDateTimeToUtcIso } from '../lib/timezone'
+import { DEFAULT_SERVICE_CATEGORIES, type ServiceCategorySlug } from '../lib/serviceCategories'
 import type { Tables } from '../types/database'
 
 type Shop = Tables<'shops'>
@@ -69,13 +70,13 @@ export function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-[var(--color-text)]">Configurações</h1>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          Configure sua barbearia
+          Configure sua empresa
         </p>
       </div>
 
       <div className="flex gap-1 overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-1">
         {[
-          { key: 'shop' as const, label: 'Dados da barbearia' },
+          { key: 'shop' as const, label: 'Dados da empresa' },
           { key: 'hours' as const, label: 'Horários' },
           { key: 'timeoff' as const, label: 'Folgas e bloqueios' },
           { key: 'members' as const, label: 'Equipe' },
@@ -142,6 +143,7 @@ function ShopSettings({
   const [geocodeProvider, setGeocodeProvider] = useState('')
   const [geocodedAt, setGeocodedAt] = useState('')
   const [timezone, setTimezone] = useState('')
+  const [selectedCategorySlugs, setSelectedCategorySlugs] = useState<ServiceCategorySlug[]>([])
   const [slotIntervalMinutes, setSlotIntervalMinutes] = useState('30')
   const [bufferMinutes, setBufferMinutes] = useState('0')
   const [loading, setLoading] = useState(false)
@@ -227,6 +229,14 @@ function ShopSettings({
     return ''
   }
 
+  function toggleCategory(slug: ServiceCategorySlug) {
+    setSelectedCategorySlugs((current) =>
+      current.includes(slug)
+        ? current.filter((currentSlug) => currentSlug !== slug)
+        : [...current, slug]
+    )
+  }
+
   function formatGeocodedTimestamp(value: string) {
     const normalized = value.trim()
     if (!normalized) return ''
@@ -274,6 +284,66 @@ function ShopSettings({
     setBufferMinutes(String(Number.isInteger(parsedBuffer) ? parsedBuffer : 0))
   }
 
+  async function loadShopCategories(shopId: string) {
+    const { data, error } = await supabase
+      .from('shop_categories')
+      .select('categories(slug)')
+      .eq('shop_id', shopId)
+
+    if (error) {
+      if (import.meta.env.DEV) {
+        console.warn('[settings][categories] failed to load categories', error)
+      }
+      setSelectedCategorySlugs([])
+      return
+    }
+
+    const rows = (data || []) as Array<{ categories: { slug: string } | null }>
+    const slugs = rows
+      .map((row) => row.categories?.slug)
+      .filter((slug): slug is ServiceCategorySlug =>
+        Boolean(slug && DEFAULT_SERVICE_CATEGORIES.some((category) => category.slug === slug))
+      )
+    setSelectedCategorySlugs(slugs)
+  }
+
+  async function saveShopCategories(shopId: string) {
+    if (selectedCategorySlugs.length === 0) {
+      throw new Error('Selecione pelo menos uma categoria.')
+    }
+
+    const { data: categories, error: categoriesError } = await supabase
+      .from('categories')
+      .select('id, slug')
+      .in('slug', selectedCategorySlugs)
+
+    if (categoriesError) {
+      throw new Error(translateError(categoriesError.message || 'Nao foi possivel carregar as categorias.'))
+    }
+
+    const categoryRows = categories || []
+    if (categoryRows.length !== selectedCategorySlugs.length) {
+      throw new Error('Uma ou mais categorias selecionadas nao existem no banco de dados.')
+    }
+
+    const { error: deleteError } = await supabase
+      .from('shop_categories')
+      .delete()
+      .eq('shop_id', shopId)
+
+    if (deleteError) {
+      throw new Error(translateError(deleteError.message || 'Nao foi possivel atualizar as categorias.'))
+    }
+
+    const { error: insertError } = await supabase
+      .from('shop_categories')
+      .insert(categoryRows.map((category) => ({ shop_id: shopId, category_id: category.id })))
+
+    if (insertError) {
+      throw new Error(translateError(insertError.message || 'Nao foi possivel salvar as categorias.'))
+    }
+  }
+
   function payloadTypeMap(payload: Record<string, unknown>) {
     return Object.fromEntries(
       Object.entries(payload).map(([key, value]) => {
@@ -292,7 +362,7 @@ function ShopSettings({
   }
 
   function buildPublicShopUrl(slug: string) {
-    return `${getPublicBaseUrl()}/barbearias/${slug}`
+    return `${getPublicBaseUrl()}/empresas/${slug}`
   }
 
   function handlePhoneChange(e: ChangeEvent<HTMLInputElement>) {
@@ -316,6 +386,7 @@ function ShopSettings({
   useEffect(() => {
     if (shop) {
       applyShopRecordToForm(shop as Partial<Shop> & Record<string, unknown>)
+      void loadShopCategories(shop.id)
     }
   }, [shop])
 
@@ -417,7 +488,12 @@ function ShopSettings({
     })
 
     if (!normalizedName) {
-      setSaveError('Informe o nome da barbearia.')
+      setSaveError('Informe o nome da empresa.')
+      return
+    }
+
+    if (selectedCategorySlugs.length === 0) {
+      setSaveError('Selecione pelo menos uma categoria.')
       return
     }
 
@@ -647,6 +723,14 @@ function ShopSettings({
       return
     }
 
+    try {
+      await saveShopCategories(shopId)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Nao foi possivel salvar as categorias.')
+      setLoading(false)
+      return
+    }
+
     if (usedLegacyFallback) {
       setGeoWarning('Dados salvos em modo compatível. Aplique as migrations novas para CEP/campos separados/mapa.')
     }
@@ -849,14 +933,14 @@ function ShopSettings({
           <div className="space-y-4">
             <div className="flex items-center gap-4">
               {avatarPreview ? (
-                <img src={avatarPreview} alt="Logo da barbearia" className="h-16 w-16 rounded-xl object-cover" />
+                <img src={avatarPreview} alt="Logo da empresa" className="h-16 w-16 rounded-xl object-cover" />
               ) : (
                 <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-[var(--color-surface-muted)] text-[var(--color-text-muted)]">
                   <ImageIcon size={22} />
                 </div>
               )}
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-[var(--color-text)]">Imagem da barbearia</p>
+                <p className="text-sm font-semibold text-[var(--color-text)]">Imagem da empresa</p>
                 <p className="text-xs text-[var(--color-text-muted)]">JPG, PNG, WEBP ou GIF. Máximo 2MB.</p>
                 <label className="native-upload-trigger">
                   <Upload size={16} />
@@ -874,7 +958,7 @@ function ShopSettings({
             {avatarError && (
               <div className="rounded-lg bg-[var(--color-primary-soft)] p-2 text-xs text-[var(--color-primary)]">{avatarError}</div>
             )}
-            <p className="text-sm font-semibold text-[var(--color-text)]">Link público da barbearia</p>
+            <p className="text-sm font-semibold text-[var(--color-text)]">Link público da empresa</p>
             <p className="text-xs text-[var(--color-text-muted)]">
               Compartilhe este link para que clientes visualizem sua página pública e façam agendamentos.
             </p>
@@ -921,7 +1005,7 @@ function ShopSettings({
               {geoWarning}
             </div>
           )}
-          <Input label="Nome da barbearia" value={name} onChange={(e) => setName(e.target.value)} disabled={!isAdmin} required />
+          <Input label="Nome da empresa" value={name} onChange={(e) => setName(e.target.value)} disabled={!isAdmin} required />
           <Input
             label="Telefone"
             value={phone}
@@ -931,6 +1015,36 @@ function ShopSettings({
             maxLength={15}
             disabled={!isAdmin}
           />
+          <section className="space-y-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-3">
+            <div>
+              <p className="text-sm font-semibold text-[var(--color-text)]">Categorias</p>
+              <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+                Selecione onde sua empresa aparece no marketplace.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {DEFAULT_SERVICE_CATEGORIES.map((category) => {
+                const selected = selectedCategorySlugs.includes(category.slug)
+                return (
+                  <button
+                    key={category.slug}
+                    type="button"
+                    onClick={() => toggleCategory(category.slug)}
+                    disabled={!isAdmin}
+                    aria-pressed={selected}
+                    className={`rounded-xl border px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      selected
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-text)]'
+                        : 'border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]'
+                    }`}
+                  >
+                    <span className="font-semibold">{category.name}</span>
+                    <span className="mt-0.5 block text-xs">{category.description}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
           <Input
             label="CEP"
             value={cep}
@@ -1046,7 +1160,7 @@ function ShopSettings({
 
       <AvatarCropModal
         open={cropModalOpen}
-        title="Editar logo da barbearia"
+        title="Editar logo da empresa"
         file={pendingAvatarFile}
         loading={avatarLoading}
         error={avatarError}
@@ -1350,7 +1464,7 @@ function TimeOffSettings({
               <div key={to.id} className="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-[var(--color-text)]">
-                    {to.professionals?.name || 'Toda a barbearia'}
+                    {to.professionals?.name || 'Toda a empresa'}
                   </p>
                   <p className="text-xs text-[var(--color-text-muted)]">
                     {formatShortDateTimeInTimeZone(to.start_at, timeZone)} — {formatShortDateTimeInTimeZone(to.end_at, timeZone)}
@@ -1381,8 +1495,8 @@ function TimeOffSettings({
             </div>
           )}
 
-          <Select label="Profissional (vazio = toda a barbearia)" value={formProfId} onChange={(e) => setFormProfId(e.target.value)}>
-            <option value="">Toda a barbearia</option>
+          <Select label="Profissional (vazio = toda a empresa)" value={formProfId} onChange={(e) => setFormProfId(e.target.value)}>
+            <option value="">Toda a empresa</option>
             {professionals.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}

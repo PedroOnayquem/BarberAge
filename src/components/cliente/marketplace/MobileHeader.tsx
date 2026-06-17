@@ -31,14 +31,14 @@ export function MobileHeader({
   const hasActiveFilters = !!cityFilter.trim() || !!stateFilter
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur">
-      <div className="space-y-3 px-4 pb-3 pt-3 shadow-[0_4px_16px_rgba(15,23,42,0.06)]">
+    <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-bg)]/90 backdrop-blur-xl">
+      <div className="space-y-3 px-4 pb-3 pt-3 shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)]">
+            <div className="flex h-8 w-8 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-white/[0.055]">
               <img
                 src="/apple-touch-icon.png"
-                alt="Ícone BarberAge"
+                alt="BarberAge"
                 className="h-5 w-5 object-contain sm:h-6 sm:w-6"
                 loading="eager"
                 decoding="async"
@@ -46,7 +46,7 @@ export function MobileHeader({
             </div>
             <div>
               <p className="text-sm font-bold text-[var(--color-text)]">BarberAge</p>
-              <p className="text-[11px] text-[var(--color-text-muted)]">Explorar barbearias</p>
+              <p className="text-[11px] text-[var(--color-text-muted)]">Explorar serviços locais</p>
             </div>
           </div>
 
@@ -56,7 +56,7 @@ export function MobileHeader({
             className={`relative inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors ${
               filtersOpen || hasActiveFilters
                 ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]'
-                : 'border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text)]'
+                : 'border-[var(--color-border)] bg-white/[0.055] text-[var(--color-text)]'
             }`}
             aria-label="Abrir filtros"
           >
@@ -78,7 +78,7 @@ export function MobileHeader({
             onChange={(e) => onCityFilterChange(e.target.value)}
             list="mobile-city-suggestions"
             placeholder="Buscar por cidade..."
-            className="w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-input-bg)] py-2.5 pl-9 pr-3 text-sm text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/25"
+            className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] py-2.5 pl-9 pr-3 text-sm text-[var(--color-text)] outline-none transition-all focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/25"
           />
           <datalist id="mobile-city-suggestions">
             {cityOptions.map((cityOption) => (
@@ -92,14 +92,14 @@ export function MobileHeader({
         </div>
 
         {filtersOpen && (
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-3 shadow-[var(--shadow-card)]">
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)]/95 p-3 shadow-[var(--shadow-card)]">
+            <label className="mb-1.5 block text-xs font-semibold text-[var(--color-text-muted)]">
               UF
             </label>
             <select
               value={stateFilter}
               onChange={(e) => onStateFilterChange(e.target.value)}
-              className="w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-input-bg)] px-3 py-2.5 text-sm text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/25"
+              className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] px-3 py-2.5 text-sm text-[var(--color-text)] outline-none transition-all focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/25"
             >
               <option value="">Todas</option>
               {stateOptions.map((uf) => (
@@ -109,13 +109,13 @@ export function MobileHeader({
               ))}
             </select>
 
-            <label className="mb-1.5 mt-3 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+            <label className="mb-1.5 mt-3 block text-xs font-semibold text-[var(--color-text-muted)]">
               Ordenar por
             </label>
             <select
               value={sortMode}
               onChange={(e) => onSortModeChange(e.target.value as 'relevance' | 'name')}
-              className="w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-input-bg)] px-3 py-2.5 text-sm text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/25"
+              className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-input-bg)] px-3 py-2.5 text-sm text-[var(--color-text)] outline-none transition-all focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/25"
             >
               <option value="relevance">Relevância</option>
               <option value="name">Nome (A-Z)</option>

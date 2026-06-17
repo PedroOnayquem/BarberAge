@@ -8,7 +8,7 @@ import { CLIENT_AVATARS_BUCKET, getSignedAvatarUrl } from '../../lib/avatarStora
 
 function getRouteMeta(pathname: string) {
   if (pathname.startsWith('/cliente/buscar')) {
-    return { title: 'Buscar', subtitle: 'Encontre por serviço ou barbearia' }
+    return { title: 'Buscar', subtitle: 'Encontre por serviço, empresa ou cidade' }
   }
   if (pathname.startsWith('/cliente/agendamentos')) {
     return { title: 'Meus Agendamentos', subtitle: 'Acompanhe suas reservas' }
@@ -16,8 +16,8 @@ function getRouteMeta(pathname: string) {
   if (pathname.startsWith('/cliente/perfil')) {
     return { title: 'Perfil', subtitle: 'Seus dados e preferências' }
   }
-  if (pathname.startsWith('/cliente/barbearias')) {
-    return { title: 'BarberAge', subtitle: 'Explorar barbearias' }
+  if (pathname.startsWith('/cliente/empresas')) {
+    return { title: 'BarberAge', subtitle: 'Explorar serviços locais' }
   }
   return { title: 'BarberAge', subtitle: 'Área do cliente' }
 }
@@ -51,14 +51,14 @@ export function ClientMobileLayout() {
   }
 
   const mobileNavItems = [
-    { to: '/cliente/barbearias', icon: Home, label: 'Início' },
+    { to: '/cliente/empresas', icon: Home, label: 'Início' },
     { to: '/cliente/buscar', icon: Search, label: 'Buscar' },
     { to: '/cliente/agendamentos', icon: CalendarCheck, label: 'Agendamentos' },
     { to: '/cliente/perfil', icon: UserRound, label: 'Perfil' },
   ]
 
   const desktopNavItems = [
-    { to: '/cliente/barbearias', icon: Home, label: 'Barbearias' },
+    { to: '/cliente/empresas', icon: Home, label: 'Empresas' },
     { to: '/cliente/buscar', icon: Search, label: 'Buscar' },
     { to: '/cliente/agendamentos', icon: CalendarCheck, label: 'Meus Agendamentos' },
     { to: '/cliente/perfil', icon: UserRound, label: 'Perfil' },
@@ -66,13 +66,13 @@ export function ClientMobileLayout() {
 
   return (
     <div className="app-shell flex min-h-screen flex-col">
-      <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+      <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]/86 backdrop-blur-xl">
         <div className="mx-auto flex h-[70px] w-full max-w-6xl items-center justify-between px-4 sm:px-5 md:px-6">
           <div className="min-w-0">
             <h1 className="truncate text-base font-bold text-[var(--color-text)] md:text-lg">
               {routeMeta.title}
             </h1>
-            <p className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+            <p className="truncate text-xs font-medium text-[var(--color-text-muted)]">
               {routeMeta.subtitle}
             </p>
           </div>
@@ -92,7 +92,7 @@ export function ClientMobileLayout() {
 
             <button
               onClick={toggleTheme}
-              className="rounded-xl p-2 text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]"
+              className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-2 text-[var(--color-text)] transition-colors hover:bg-white/[0.09]"
               title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
               aria-label="Alternar tema"
             >
@@ -101,7 +101,7 @@ export function ClientMobileLayout() {
 
             <button
               onClick={handleLogout}
-              className="rounded-xl p-2 text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]"
+              className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-2 text-[var(--color-text)] transition-colors hover:bg-white/[0.09]"
               title="Sair"
               aria-label="Sair"
             >
@@ -116,15 +116,15 @@ export function ClientMobileLayout() {
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--color-border)] bg-[var(--color-bg-elevated)]/95 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--color-border)] bg-[var(--color-bg-elevated)]/90 backdrop-blur-xl md:hidden">
         <div className="mx-auto grid max-w-6xl grid-cols-4 px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-2">
           {mobileNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 py-1.5 text-[10px] font-semibold transition-colors ${
-                  isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'
+                `flex flex-col items-center gap-1 rounded-2xl py-1.5 text-[10px] font-semibold transition-all ${
+                  isActive ? 'brand-gradient-bg text-white shadow-[0_10px_24px_rgba(123,97,255,0.22)]' : 'text-[var(--color-text-muted)]'
                 }`
               }
             >
@@ -135,15 +135,15 @@ export function ClientMobileLayout() {
         </div>
       </nav>
 
-      <nav className="hidden border-t border-[var(--color-border)] bg-[var(--color-bg-elevated)] md:sticky md:bottom-0 md:block">
+      <nav className="hidden border-t border-[var(--color-border)] bg-[var(--color-bg-elevated)]/90 backdrop-blur-xl md:sticky md:bottom-0 md:block">
         <div className="mx-auto flex max-w-6xl px-2">
           {desktopNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex flex-1 flex-col items-center gap-1 py-3 text-xs font-semibold transition-colors ${
-                  isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                `flex flex-1 flex-col items-center gap-1 rounded-2xl py-3 text-xs font-semibold transition-all ${
+                  isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
                 }`
               }
             >

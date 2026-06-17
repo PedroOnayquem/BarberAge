@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MapPin, Scissors } from 'lucide-react'
+import { CalendarPlus, MapPin } from 'lucide-react'
 import type { MarketplaceShop } from './types'
 
 interface ShopListCardProps {
@@ -14,16 +14,16 @@ function formatLocation(shop: Pick<MarketplaceShop, 'address' | 'neighborhood' |
 
 export function ShopListCard({ shop }: ShopListCardProps) {
   return (
-    <article className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 shadow-[var(--shadow-card)]">
+    <article className="rounded-2xl border border-[var(--color-border)] bg-white/[0.055] p-4 shadow-[var(--shadow-card)] transition-all duration-200 active:scale-[0.99]">
       <div className="flex items-start gap-3">
         {shop.avatarSignedUrl ? (
           <img
             src={shop.avatarSignedUrl}
             alt={`Logo da ${shop.name}`}
-            className="h-14 w-14 rounded-xl object-cover"
+            className="h-14 w-14 rounded-2xl object-cover"
           />
         ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[var(--color-surface-muted)] text-base font-bold text-[var(--color-text)]">
+          <div className="brand-gradient-soft flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 text-base font-bold text-[var(--color-text)]">
             {shop.name.charAt(0).toUpperCase()}
           </div>
         )}
@@ -34,13 +34,18 @@ export function ShopListCard({ shop }: ShopListCardProps) {
               <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
                 {shop.professionals_count} profissionais · {shop.services_count} serviços
               </p>
+              {shop.category_names.length > 0 && (
+                <p className="mt-1 text-xs font-medium text-[var(--color-accent)]">
+                  {shop.category_names.join(' · ')}
+                </p>
+              )}
             </div>
             {shop.can_book ? (
-              <span className="rounded-full bg-[var(--color-primary-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">
+              <span className="rounded-full border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--color-accent)]">
                 Agenda disponível
               </span>
             ) : (
-              <span className="rounded-full bg-[var(--color-surface-muted)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+              <span className="rounded-full bg-white/[0.07] px-2 py-1 text-[10px] font-semibold text-[var(--color-text-muted)]">
                 Em configuração
               </span>
             )}
@@ -56,11 +61,11 @@ export function ShopListCard({ shop }: ShopListCardProps) {
       <div className="mt-3">
         {shop.can_book ? (
           <Link
-            to={`/cliente/barbearias/${shop.slug}`}
+            to={`/cliente/empresas/${shop.slug}`}
             onClick={() => localStorage.setItem('barberage_client_preferred_shop', shop.id)}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+            className="brand-gradient-bg inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:brightness-110"
           >
-            <Scissors size={15} />
+            <CalendarPlus size={15} />
             Agendar
           </Link>
         ) : (
@@ -68,9 +73,9 @@ export function ShopListCard({ shop }: ShopListCardProps) {
             <button
               type="button"
               disabled
-              className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-2.5 text-sm font-semibold text-[var(--color-text-muted)]"
+              className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-white/[0.045] px-4 py-2.5 text-sm font-semibold text-[var(--color-text-muted)]"
             >
-              <Scissors size={15} />
+              <CalendarPlus size={15} />
               Em configuração
             </button>
             {shop.reason && (

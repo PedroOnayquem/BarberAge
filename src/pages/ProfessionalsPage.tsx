@@ -118,7 +118,7 @@ export function ProfessionalsPage() {
         <div>
           <h1 className="text-2xl font-bold text-[var(--color-text)]">Profissionais</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Gerencie os barbeiros e profissionais
+            Gerencie os profissionais da equipe
           </p>
         </div>
         <Button onClick={openNew}>

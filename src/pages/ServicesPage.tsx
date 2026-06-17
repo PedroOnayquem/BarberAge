@@ -79,7 +79,7 @@ export function ServicesPage() {
     })
 
     if (hasDuplicateName) {
-      setFormError('Já existe um serviço com esse nome na sua barbearia.')
+      setFormError('Já existe um serviço com esse nome nesta empresa.')
       return
     }
 
@@ -97,7 +97,7 @@ export function ServicesPage() {
       const { error } = await supabase.from('services').update(payload).eq('id', editingService.id)
       if (error) {
         if (error.code === '23505' || error.message.includes('services_shop_id_name_key')) {
-          setFormError('Já existe um serviço com esse nome na sua barbearia.')
+          setFormError('Já existe um serviço com esse nome nesta empresa.')
         } else {
           setFormError(translateError(error.message))
         }
@@ -108,7 +108,7 @@ export function ServicesPage() {
       const { error } = await supabase.from('services').insert(payload)
       if (error) {
         if (error.code === '23505' || error.message.includes('services_shop_id_name_key')) {
-          setFormError('Já existe um serviço com esse nome na sua barbearia.')
+          setFormError('Já existe um serviço com esse nome nesta empresa.')
         } else {
           setFormError(translateError(error.message))
         }
@@ -208,7 +208,7 @@ export function ServicesPage() {
               {formError}
             </div>
           )}
-          <Input label="Nome do serviço" value={formName} onChange={(e) => setFormName(e.target.value)} helperText="Ex: Corte masculino" required />
+          <Input label="Nome do serviço" value={formName} onChange={(e) => setFormName(e.target.value)} helperText="Ex: Limpeza completa" required />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Duração (minutos)" type="number" min="1" value={formDuration} onChange={(e) => setFormDuration(e.target.value)} helperText="30" required />
             <Input label="Preço (R$)" type="number" min="0" step="0.01" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} helperText="50.00" required />

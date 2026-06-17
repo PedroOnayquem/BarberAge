@@ -212,6 +212,42 @@ export type Database = {
         }
         Relationships: []
       }
+      categories: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       professionals: {
         Row: {
           active: boolean
@@ -313,6 +349,39 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "shop_members_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shop_categories: {
+        Row: {
+          category_id: string
+          created_at: string
+          shop_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          shop_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          shop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_categories_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
             referencedRelation: "shops"
@@ -600,6 +669,55 @@ export type Database = {
           end_at: string
           duration_minutes: number
           buffer_minutes: number
+        }[]
+      }
+      list_public_service_businesses_with_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          name: string
+          slug: string
+          address: string | null
+          neighborhood: string | null
+          city: string | null
+          state: string | null
+          avatar_url: string | null
+          category_slugs: string[]
+          category_names: string[]
+          service_names: string[]
+          services_count: number
+          professionals_count: number
+          schedule_configured: boolean
+          catalog_active: boolean
+          can_book: boolean
+          missing_reasons: string[]
+        }[]
+      }
+      list_public_service_businesses_with_status_filtered: {
+        Args: {
+          p_search?: string | null
+          p_category_slug?: string | null
+          p_city?: string | null
+          p_state?: string | null
+        }
+        Returns: {
+          id: string
+          name: string
+          slug: string
+          address: string | null
+          neighborhood: string | null
+          city: string | null
+          state: string | null
+          avatar_url: string | null
+          category_slugs: string[]
+          category_names: string[]
+          service_names: string[]
+          services_count: number
+          professionals_count: number
+          schedule_configured: boolean
+          catalog_active: boolean
+          can_book: boolean
+          missing_reasons: string[]
         }[]
       }
       list_public_barbershops_with_status: {

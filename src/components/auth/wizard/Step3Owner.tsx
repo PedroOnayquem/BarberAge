@@ -49,7 +49,7 @@ export function Step3Owner({
       />
 
       <Input
-        label="Nome da barbearia"
+        label="Nome da empresa"
         value={data.shopName}
         onChange={(event) => onFieldChange('shopName', event.target.value)}
         error={errors.shopName}
@@ -59,7 +59,7 @@ export function Step3Owner({
       <section className="rounded-2xl border border-[rgba(148,163,184,0.24)] bg-[rgba(15,23,42,0.72)] p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-[#f8fafc]">Logo da barbearia (opcional)</p>
+            <p className="text-sm font-semibold text-[#f8fafc]">Logo da empresa (opcional)</p>
             <p className="text-xs text-[#94a3b8]">PNG ou JPG, maximo de 2MB.</p>
           </div>
 

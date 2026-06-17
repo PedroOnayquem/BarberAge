@@ -148,13 +148,13 @@ export function DashboardPage() {
         <h1 className="text-2xl font-bold text-[var(--color-text)]">Dashboard</h1>
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-5">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Nenhuma barbearia vinculada a esta conta no momento.
+            Nenhuma empresa vinculada a esta conta no momento.
           </p>
           <Link
             to="/create-shop"
             className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-[var(--color-primary)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)]"
           >
-            Abrir cadastro da barbearia
+            Abrir cadastro da empresa
           </Link>
         </div>
       </div>
@@ -175,11 +175,11 @@ export function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold text-[var(--color-text)]">Dashboard</h1>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          Visão geral da sua barbearia
+          Visão geral da sua empresa
         </p>
         <div className="mt-4 flex items-center gap-3">
           {shopAvatar ? (
-            <img src={shopAvatar} alt="Logo da barbearia" className="h-14 w-14 rounded-xl object-cover" />
+            <img src={shopAvatar} alt="Logo da empresa" className="h-14 w-14 rounded-xl object-cover" />
           ) : (
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[var(--color-surface-muted)] text-lg font-bold text-[var(--color-text)]">
               {(currentShop?.name || 'B').charAt(0).toUpperCase()}
